@@ -6,9 +6,11 @@ import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Footer } from "../components/footer";
+import { getApiUrl } from "../config/api";
+import { clearAuthSession, getAuthHeaders } from "../lib/auth";
 
 interface Idoso {
-  id: string;
+  id: number;
   nome: string;
   idade: number;
   foto?: string;
@@ -36,7 +38,6 @@ export function DashboardPage() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   useEffect(() => {
-    // Verificar se está logado
     const userData = localStorage.getItem("user");
     if (!userData) {
       navigate("/login");
@@ -44,24 +45,78 @@ export function DashboardPage() {
     }
     setUser(JSON.parse(userData));
 
-    // Carregar idosos do localStorage
-    const idososData = localStorage.getItem("idosos");
-    if (idososData) {
-      setIdosos(JSON.parse(idososData));
-    }
+    const loadDashboardData = async () => {
+      try {
+        const [instituicaoResponse, idososResponse] = await Promise.all([
+          fetch(getApiUrl("/api/instituicoes/me"), {
+            headers: {
+              ...getAuthHeaders(),
+            },
+          }),
+          fetch(getApiUrl("/api/idosos"), {
+            headers: {
+              ...getAuthHeaders(),
+            },
+          }),
+        ]);
 
-    // Carregar instituição
-    const instituicaoData = localStorage.getItem("instituicao");
-    if (instituicaoData) {
-      const inst = JSON.parse(instituicaoData);
-      setInstituicao(inst);
-      setEditedInstituicao(inst);
-    }
+        if (instituicaoResponse.status === 401 || idososResponse.status === 401) {
+          clearAuthSession();
+          navigate("/login");
+          return;
+        }
+
+        const instituicaoData = await instituicaoResponse.json();
+        const idososData = await idososResponse.json();
+
+        if (instituicaoData.instituicao) {
+          const mappedInstituicao = {
+            nomeInstituicao: instituicaoData.instituicao.nome,
+            cnpj: instituicaoData.instituicao.cnpj,
+            endereco: instituicaoData.instituicao.endereco,
+            cidade: instituicaoData.instituicao.cidade,
+            estado: instituicaoData.instituicao.estado,
+            cep: instituicaoData.instituicao.cep,
+            telefone: instituicaoData.instituicao.telefone,
+            descricao: instituicaoData.instituicao.descricao,
+          };
+
+          setInstituicao(mappedInstituicao);
+          setEditedInstituicao(mappedInstituicao);
+          localStorage.setItem("instituicao", JSON.stringify(mappedInstituicao));
+        }
+
+        const mappedIdosos = (idososData.idosos || []).map((item: any) => ({
+          id: item.id,
+          nome: item.nome,
+          idade: item.idade,
+          foto: item.foto_url,
+          historia: item.historia,
+        }));
+
+        setIdosos(mappedIdosos);
+        localStorage.setItem("idosos", JSON.stringify(mappedIdosos));
+      } catch {
+        // fallback para dados locais quando API estiver indisponivel
+        const idososData = localStorage.getItem("idosos");
+        if (idososData) {
+          setIdosos(JSON.parse(idososData));
+        }
+
+        const instituicaoData = localStorage.getItem("instituicao");
+        if (instituicaoData) {
+          const inst = JSON.parse(instituicaoData);
+          setInstituicao(inst);
+          setEditedInstituicao(inst);
+        }
+      }
+    };
+
+    loadDashboardData();
   }, [navigate]);
 
   const handleLogout = () => {
-    localStorage.removeItem("user");
-    localStorage.removeItem("moderadorAccess");
+    clearAuthSession();
     navigate("/");
   };
 
@@ -69,8 +124,30 @@ export function DashboardPage() {
     setIsEditingInstituicao(true);
   };
 
-  const handleSaveInstituicao = () => {
+  const handleSaveInstituicao = async () => {
     if (editedInstituicao) {
+      try {
+        await fetch(getApiUrl("/api/instituicoes/me"), {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            ...getAuthHeaders(),
+          },
+          body: JSON.stringify({
+            nome: editedInstituicao.nomeInstituicao,
+            cnpj: editedInstituicao.cnpj,
+            endereco: editedInstituicao.endereco,
+            cidade: editedInstituicao.cidade,
+            estado: editedInstituicao.estado,
+            cep: editedInstituicao.cep,
+            telefone: editedInstituicao.telefone,
+            descricao: editedInstituicao.descricao,
+          }),
+        });
+      } catch {
+        // em caso de falha de rede, persiste localmente
+      }
+
       localStorage.setItem("instituicao", JSON.stringify(editedInstituicao));
       setInstituicao(editedInstituicao);
       setIsEditingInstituicao(false);

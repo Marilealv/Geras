@@ -5,6 +5,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { getApiUrl } from "../config/api";
+import { setAuthSession } from "../lib/auth";
 
 export function RegisterPage() {
   const navigate = useNavigate();
@@ -46,6 +47,8 @@ export function RegisterPage() {
           email: formData.email,
           senha: formData.senha,
           tipo: "donatario",
+          nomeResponsavel: formData.nomeResponsavel,
+          telefone: formData.telefone,
         }),
       });
 
@@ -56,13 +59,7 @@ export function RegisterPage() {
         return;
       }
 
-      localStorage.setItem(
-        "user",
-        JSON.stringify({
-          ...data.user,
-          nome: formData.nomeResponsavel,
-        })
-      );
+      setAuthSession(data.token, data.user);
 
       navigate("/cadastrar-instituicao");
     } catch {

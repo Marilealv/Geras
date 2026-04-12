@@ -5,6 +5,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { getApiUrl } from "../config/api";
+import { setAuthSession } from "../lib/auth";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -35,7 +36,7 @@ export function LoginPage() {
         return;
       }
 
-      localStorage.setItem("user", JSON.stringify(data.user));
+      setAuthSession(data.token, data.user);
 
       if (data.user.tipo === "moderador") {
         navigate("/moderador");

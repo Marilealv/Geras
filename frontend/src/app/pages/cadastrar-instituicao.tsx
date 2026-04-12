@@ -13,10 +13,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../components/ui/dialog";
+import { getApiUrl } from "../config/api";
+import { getAuthHeaders } from "../lib/auth";
+import { uploadImageToCloudinary } from "../lib/uploads";
 
 export function CadastrarInstituicaoPage() {
   const navigate = useNavigate();
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [imagem, setImagem] = useState<File | null>(null);
   const [formData, setFormData] = useState({
     nomeInstituicao: "",
     cnpj: "",
@@ -37,11 +43,55 @@ export function CadastrarInstituicaoPage() {
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Simular cadastro de instituição
-    localStorage.setItem("instituicao", JSON.stringify(formData));
-    setShowSuccessModal(true);
+
+    setErrorMessage("");
+    setIsLoading(true);
+
+    try {
+      let imagemId: number | null = null;
+      let imagemUrlLocal: string | null = null;
+
+      // Envia a imagem para Cloudinary na pasta home/geras/instituicoes
+      if (imagem) {
+        const uploadResult = await uploadImageToCloudinary(imagem, "instituicoes");
+        imagemId = uploadResult.imagemId;
+        imagemUrlLocal = uploadResult.url;
+      }
+
+      const response = await fetch(getApiUrl("/api/instituicoes"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({
+          ...formData,
+          imagemId,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setErrorMessage(data.message || "Nao foi possivel cadastrar a instituicao.");
+        return;
+      }
+
+      localStorage.setItem(
+        "instituicao",
+        JSON.stringify({
+          ...data.instituicao,
+          imagem_url: data.instituicao.imagem_url || imagemUrlLocal,
+        })
+      );
+      setShowSuccessModal(true);
+    } catch {
+      setErrorMessage("Erro de conexao com o servidor.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleCloseModal = () => {
@@ -67,6 +117,20 @@ export function CadastrarInstituicaoPage() {
         <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl p-8 border border-teal-100">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid md:grid-cols-2 gap-6">
+              <div className="md:col-span-2">
+                <Label htmlFor="imagem" className="text-teal-900">
+                  Imagem da Instituicao (opcional)
+                </Label>
+                <Input
+                  id="imagem"
+                  name="imagem"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setImagem(e.target.files?.[0] ?? null)}
+                  className="mt-2 border-teal-200 focus:border-teal-500"
+                />
+              </div>
+
               <div className="md:col-span-2">
                 <Label htmlFor="nomeInstituicao" className="text-teal-900">
                   Nome da Instituição
@@ -195,11 +259,14 @@ export function CadastrarInstituicaoPage() {
               </div>
             </div>
 
+            {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
+
             <Button
               type="submit"
+              disabled={isLoading}
               className="w-full bg-[#F7C672] hover:bg-[#f5b85a] text-teal-900 py-6 text-lg"
             >
-              Finalizar Cadastro
+              {isLoading ? "Enviando..." : "Finalizar Cadastro"}
             </Button>
           </form>
         </div>

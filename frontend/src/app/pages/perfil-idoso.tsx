@@ -15,15 +15,17 @@ import {
   DialogTitle,
 } from "../components/ui/dialog";
 import { Footer } from "../components/footer";
+import { getApiUrl } from "../config/api";
+import { clearAuthSession, getAuthHeaders } from "../lib/auth";
 
 interface Necessidade {
-  id: string;
+  id: number;
   item: string;
   tipo: "urgente" | "desejado";
 }
 
 interface Idoso {
-  id: string;
+  id: number;
   nome: string;
   idade: number;
   dataAniversario?: string;
@@ -37,6 +39,7 @@ interface Idoso {
 
 export function PerfilIdosoPage() {
   const { id } = useParams();
+  const idosoId = Number(id);
   const navigate = useNavigate();
   const [idoso, setIdoso] = useState<Idoso | null>(null);
   const [instituicao, setInstituicao] = useState<any>(null);
@@ -58,49 +61,142 @@ export function PerfilIdosoPage() {
   };
 
   useEffect(() => {
-    // Carregar dados do idoso
-    const idososData = localStorage.getItem("idosos");
-    if (idososData) {
-      const idosos = JSON.parse(idososData);
-      const idosoEncontrado = idosos.find((i: Idoso) => i.id === id);
-      // Calcular idade baseado na data de nascimento
-      if (idosoEncontrado && idosoEncontrado.dataAniversario) {
-        idosoEncontrado.idade = calculateAge(idosoEncontrado.dataAniversario);
-      }
-      setIdoso(idosoEncontrado);
-      setEditedIdoso(idosoEncontrado);
+    if (!idosoId || Number.isNaN(idosoId)) {
+      return;
     }
 
-    // Carregar dados da instituição
-    const instituicaoData = localStorage.getItem("instituicao");
-    if (instituicaoData) {
-      setInstituicao(JSON.parse(instituicaoData));
-    }
-  }, [id]);
+    const loadData = async () => {
+      try {
+        const [idosoResponse, instituicaoResponse] = await Promise.all([
+          fetch(getApiUrl(`/api/idosos/${idosoId}`), {
+            headers: {
+              ...getAuthHeaders(),
+            },
+          }),
+          fetch(getApiUrl("/api/instituicoes/me"), {
+            headers: {
+              ...getAuthHeaders(),
+            },
+          }),
+        ]);
+
+        if (idosoResponse.status === 401 || instituicaoResponse.status === 401) {
+          clearAuthSession();
+          navigate("/login");
+          return;
+        }
+
+        if (idosoResponse.ok) {
+          const idosoPayload = await idosoResponse.json();
+          const apiIdoso = idosoPayload.idoso;
+          const mappedIdoso: Idoso = {
+            id: apiIdoso.id,
+            nome: apiIdoso.nome,
+            idade: apiIdoso.idade,
+            dataAniversario: apiIdoso.data_aniversario,
+            foto: apiIdoso.foto_url,
+            historia: apiIdoso.historia,
+            hobbies: apiIdoso.hobbies,
+            musicaFavorita: apiIdoso.musica_favorita,
+            comidaFavorita: apiIdoso.comida_favorita,
+            necessidades: (apiIdoso.necessidades || []).map((item: any) => ({
+              id: item.id,
+              item: item.item,
+              tipo: item.tipo,
+            })),
+          };
+
+          if (mappedIdoso.dataAniversario) {
+            mappedIdoso.idade = calculateAge(mappedIdoso.dataAniversario);
+          }
+
+          setIdoso(mappedIdoso);
+          setEditedIdoso(mappedIdoso);
+        }
+
+        if (instituicaoResponse.ok) {
+          const instituicaoPayload = await instituicaoResponse.json();
+          if (instituicaoPayload.instituicao) {
+            setInstituicao({
+              nomeInstituicao: instituicaoPayload.instituicao.nome,
+              endereco: instituicaoPayload.instituicao.endereco,
+              cidade: instituicaoPayload.instituicao.cidade,
+              estado: instituicaoPayload.instituicao.estado,
+              cep: instituicaoPayload.instituicao.cep,
+              telefone: instituicaoPayload.instituicao.telefone,
+            });
+          }
+        }
+      } catch {
+        const idososData = localStorage.getItem("idosos");
+        if (idososData) {
+          const idosos = JSON.parse(idososData);
+          const idosoEncontrado = idosos.find((i: Idoso) => i.id === idosoId);
+          if (idosoEncontrado && idosoEncontrado.dataAniversario) {
+            idosoEncontrado.idade = calculateAge(idosoEncontrado.dataAniversario);
+          }
+          setIdoso(idosoEncontrado);
+          setEditedIdoso(idosoEncontrado);
+        }
+
+        const instituicaoData = localStorage.getItem("instituicao");
+        if (instituicaoData) {
+          setInstituicao(JSON.parse(instituicaoData));
+        }
+      }
+    };
+
+    loadData();
+  }, [idosoId, navigate]);
 
   const handleEdit = () => {
     setIsEditing(true);
   };
 
-  const handleSave = () => {
-    if (!editedIdoso || !id) return;
+  const handleSave = async () => {
+    if (!editedIdoso || !idosoId) return;
 
     // Recalcular idade baseado na data de nascimento antes de salvar
     if (editedIdoso.dataAniversario) {
       editedIdoso.idade = calculateAge(editedIdoso.dataAniversario);
     }
 
-    // Salvar alterações no localStorage
+    try {
+      const response = await fetch(getApiUrl(`/api/idosos/${idosoId}`), {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({
+          nome: editedIdoso.nome,
+          idade: editedIdoso.idade,
+          dataAniversario: editedIdoso.dataAniversario || null,
+          historia: editedIdoso.historia || null,
+          hobbies: editedIdoso.hobbies || null,
+          musicaFavorita: editedIdoso.musicaFavorita || null,
+          comidaFavorita: editedIdoso.comidaFavorita || null,
+        }),
+      });
+
+      if (response.status === 401) {
+        clearAuthSession();
+        navigate("/login");
+        return;
+      }
+    } catch {
+      // se a API falhar, mantem compatibilidade com armazenamento local
+    }
+
     const idososData = localStorage.getItem("idosos");
     if (idososData) {
       const idosos = JSON.parse(idososData);
-      const idososAtualizados = idosos.map((i: Idoso) =>
-        i.id === id ? editedIdoso : i
-      );
+      const idososAtualizados = idosos.map((i: Idoso) => (i.id === idosoId ? editedIdoso : i));
       localStorage.setItem("idosos", JSON.stringify(idososAtualizados));
-      setIdoso(editedIdoso);
-      setIsEditing(false);
     }
+
+    setIdoso(editedIdoso);
+    setIsEditing(false);
   };
 
   const handleCancelEditing = () => {
@@ -127,18 +223,37 @@ export function PerfilIdosoPage() {
   const desejados = (isEditing ? editedIdoso?.necessidades : idoso.necessidades)?.filter((n) => n.tipo === "desejado") || [];
 
   const handleDeleteIdoso = () => {
-    if (!id) return;
+    if (!idosoId) return;
 
-    // Remover idoso do localStorage
-    const idososData = localStorage.getItem("idosos");
-    if (idososData) {
-      const idosos = JSON.parse(idososData);
-      const idososAtualizados = idosos.filter((i: Idoso) => i.id !== id);
-      localStorage.setItem("idosos", JSON.stringify(idososAtualizados));
-    }
+    const deleteByApi = async () => {
+      try {
+        const response = await fetch(getApiUrl(`/api/idosos/${idosoId}`), {
+          method: "DELETE",
+          headers: {
+            ...getAuthHeaders(),
+          },
+        });
 
-    // Redirecionar para o dashboard
-    navigate("/dashboard");
+        if (response.status === 401) {
+          clearAuthSession();
+          navigate("/login");
+          return;
+        }
+      } catch {
+        // fallback local
+      }
+
+      const idososData = localStorage.getItem("idosos");
+      if (idososData) {
+        const idosos = JSON.parse(idososData);
+        const idososAtualizados = idosos.filter((i: Idoso) => i.id !== idosoId);
+        localStorage.setItem("idosos", JSON.stringify(idososAtualizados));
+      }
+
+      navigate("/dashboard");
+    };
+
+    deleteByApi();
   };
 
   const displayIdoso = isEditing ? editedIdoso : idoso;

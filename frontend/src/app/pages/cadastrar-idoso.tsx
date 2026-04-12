@@ -7,6 +7,9 @@ import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import { Card, CardContent } from "../components/ui/card";
 import { Plus, X } from "lucide-react";
+import { getApiUrl } from "../config/api";
+import { getAuthHeaders } from "../lib/auth";
+import { uploadImageToCloudinary } from "../lib/uploads";
 
 interface Necessidade {
   id: string;
@@ -17,11 +20,13 @@ interface Necessidade {
 export function CadastrarIdosoPage() {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [fotoFile, setFotoFile] = useState<File | null>(null);
   const [formData, setFormData] = useState({
     nome: "",
     idade: "",
     dataAniversario: "",
-    fotoUrl: "",
     historia: "",
     hobbies: "",
     musicaFavorita: "",
@@ -59,31 +64,60 @@ export function CadastrarIdosoPage() {
     setNecessidades(necessidades.filter((n) => n.id !== id));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Salvar idoso
-    const novoIdoso = {
-      id: Date.now().toString(),
-      nome: formData.nome,
-      idade: parseInt(formData.idade),
-      dataAniversario: formData.dataAniversario,
-      foto: formData.fotoUrl,
-      historia: formData.historia,
-      hobbies: formData.hobbies,
-      musicaFavorita: formData.musicaFavorita,
-      comidaFavorita: formData.comidaFavorita,
-      necessidades: necessidades,
-    };
 
-    // Recuperar idosos existentes
-    const idososExistentes = JSON.parse(
-      localStorage.getItem("idosos") || "[]"
-    );
-    idososExistentes.push(novoIdoso);
-    localStorage.setItem("idosos", JSON.stringify(idososExistentes));
+    setErrorMessage("");
+    setIsLoading(true);
 
-    navigate("/dashboard");
+    try {
+      let fotoImagemId: number | null = null;
+
+      // Envia a foto para Cloudinary na pasta home/geras/idosos
+      if (fotoFile) {
+        const uploadResult = await uploadImageToCloudinary(fotoFile, "idosos");
+        fotoImagemId = uploadResult.imagemId;
+      }
+
+      const response = await fetch(getApiUrl("/api/idosos"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({
+          nome: formData.nome,
+          idade: Number(formData.idade),
+          dataAniversario: formData.dataAniversario || null,
+          fotoImagemId,
+          historia: formData.historia,
+          hobbies: formData.hobbies,
+          musicaFavorita: formData.musicaFavorita,
+          comidaFavorita: formData.comidaFavorita,
+          necessidades,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setErrorMessage(data.message || "Nao foi possivel cadastrar o idoso.");
+        return;
+      }
+
+      const idososExistentes = JSON.parse(localStorage.getItem("idosos") || "[]");
+      idososExistentes.push({
+        ...data.idoso,
+        foto: data.idoso.foto_url,
+      });
+      localStorage.setItem("idosos", JSON.stringify(idososExistentes));
+
+      navigate("/dashboard");
+    } catch {
+      setErrorMessage("Erro de conexao com o servidor.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -203,19 +237,19 @@ export function CadastrarIdosoPage() {
                 </div>
 
                 <div>
-                  <Label htmlFor="fotoUrl" className="text-teal-900">
-                    URL da Foto (opcional)
+                  <Label htmlFor="fotoFile" className="text-teal-900">
+                    Upload da Foto (opcional)
                   </Label>
                   <Input
-                    id="fotoUrl"
-                    name="fotoUrl"
-                    type="url"
-                    value={formData.fotoUrl}
-                    onChange={handleChange}
-                    placeholder="https://..."
+                    id="fotoFile"
+                    name="fotoFile"
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setFotoFile(e.target.files?.[0] ?? null)}
                     className="mt-2 border-teal-200 focus:border-teal-500"
                   />
                 </div>
+
 
                 <Button
                   type="button"
@@ -432,11 +466,14 @@ export function CadastrarIdosoPage() {
                   </Button>
                   <Button
                     type="submit"
+                    disabled={isLoading}
                     className="flex-1 bg-[#F7C672] hover:bg-[#f5b85a] text-teal-900 py-6 text-lg"
                   >
-                    Finalizar Cadastro
+                    {isLoading ? "Salvando..." : "Finalizar Cadastro"}
                   </Button>
                 </div>
+
+                {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
               </div>
             )}
           </form>
