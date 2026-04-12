@@ -39,13 +39,22 @@ export async function uploadImageToCloudinary(
     body: formData,
   });
 
-  const data = await response.json();
+  // A API pode responder JSON de erro ou texto/HTML; tratamos os dois cenarios.
+  const rawBody = await response.text();
+  let data: any = null;
 
-  if (!response.ok) {
-    throw new Error(data.message || "Falha no upload da imagem.");
+  try {
+    data = rawBody ? JSON.parse(rawBody) : null;
+  } catch {
+    data = null;
   }
 
-  if (!data.imagem?.id || !data.imagem?.url || !data.imagem?.publicId) {
+  if (!response.ok) {
+    const apiMessage = data?.message;
+    throw new Error(apiMessage || `Falha no upload da imagem (HTTP ${response.status}).`);
+  }
+
+  if (!data?.imagem?.id || !data?.imagem?.url || !data?.imagem?.publicId) {
     throw new Error("Resposta de upload invalida.");
   }
 

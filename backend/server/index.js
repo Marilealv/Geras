@@ -290,7 +290,25 @@ app.post("/api/uploads/image", authMiddleware, upload.single("image"), async (re
     });
   } catch (error) {
     console.error("Erro no upload de imagem:", error);
-    return res.status(500).json({ message: "Erro ao enviar imagem." });
+    const errorCode = error?.code || error?.error?.code;
+    const errorMessage = error?.message || error?.error?.message;
+
+    // Mensagens claras para acelerar diagnóstico em produção.
+    if (errorCode === "42P01") {
+      return res.status(500).json({
+        message: "Tabela de imagens nao encontrada no banco. Rode o SQL mais recente.",
+      });
+    }
+
+    if (error?.http_code) {
+      return res.status(500).json({
+        message: `Falha no Cloudinary (HTTP ${error.http_code}). Verifique credenciais e pasta.`,
+      });
+    }
+
+    return res.status(500).json({
+      message: errorMessage || "Erro ao enviar imagem.",
+    });
   }
 });
 

@@ -87,8 +87,12 @@ export function CadastrarInstituicaoPage() {
         })
       );
       setShowSuccessModal(true);
-    } catch {
-      setErrorMessage("Erro de conexao com o servidor.");
+    } catch (error) {
+      if (error instanceof Error) {
+        setErrorMessage(error.message);
+      } else {
+        setErrorMessage("Erro de conexao com o servidor.");
+      }
     } finally {
       setIsLoading(false);
     }
