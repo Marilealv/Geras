@@ -16,7 +16,7 @@ import {
 } from "../components/ui/dialog";
 import { Footer } from "../components/footer";
 import { getApiUrl } from "../config/api";
-import { clearAuthSession, getAuthHeaders } from "../lib/auth";
+import { clearAuthSession, getAuthHeaders, getAuthToken } from "../lib/auth";
 
 interface Necessidade {
   id: number;
@@ -139,7 +139,7 @@ export function PerfilIdosoPage() {
 
           if (apiIdoso.instituicao) {
             setInstituicao({
-              usuarioId: apiIdoso.instituicao.usuario_id,
+              usuarioId: Number(apiIdoso.instituicao.usuario_id),
               nomeInstituicao: apiIdoso.instituicao.nome,
               endereco: apiIdoso.instituicao.endereco,
               cidade: apiIdoso.instituicao.cidade,
@@ -182,9 +182,11 @@ export function PerfilIdosoPage() {
     loadData();
   }, [idosoId]);
 
+  const hasActiveSession = Boolean(authUser && getAuthToken());
   const canManageProfile =
-    authUser?.tipo === "moderador" ||
-    (authUser?.tipo === "donatario" && authUser.id === instituicao?.usuarioId);
+    hasActiveSession &&
+    (authUser?.tipo === "moderador" ||
+      (authUser?.tipo === "donatario" && authUser.id === instituicao?.usuarioId));
   const isEditMode = Boolean(canManageProfile && isEditing);
   const backPath = authUser ? "/dashboard" : "/";
 
