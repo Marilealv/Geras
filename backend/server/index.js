@@ -42,7 +42,7 @@ app.post("/api/auth/register", async (req, res) => {
     const senhaHash = await bcrypt.hash(senha, 12);
 
     await pool.query(
-      'INSERT INTO usuarios (email, senha, "tipo_usuário") VALUES ($1, $2, $3)',
+      'INSERT INTO usuarios (email, senha, tipo_usuario) VALUES ($1, $2, $3)',
       [email, senhaHash, tipo]
     );
 
@@ -67,7 +67,7 @@ app.post("/api/auth/login", async (req, res) => {
 
   try {
     const result = await pool.query(
-      'SELECT email, senha, "tipo_usuário" AS tipo_usuario FROM usuarios WHERE email = $1 LIMIT 1',
+      'SELECT email, senha, "tipo_usuario" FROM usuarios WHERE email = $1 LIMIT 1',
       [email]
     );
 
