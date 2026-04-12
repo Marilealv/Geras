@@ -4,7 +4,8 @@ import { LogOut, CheckCircle, XCircle, Eye, Trash2, Ban, Building2, RefreshCw, U
 import logoGeras from "../../imports/geras.png";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
-import { clearAuthSession } from "../lib/auth";
+import { getApiUrl } from "../config/api";
+import { clearAuthSession, getAuthHeaders } from "../lib/auth";
 import {
   Dialog,
   DialogContent,
@@ -36,6 +37,50 @@ export function ModeradorPage() {
   const [showActionModal, setShowActionModal] = useState(false);
   const [actionType, setActionType] = useState<"aprovar" | "recusar" | "desativar" | "excluir" | "reativar">("aprovar");
   const [motivoRecusa, setMotivoRecusa] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmittingAction, setIsSubmittingAction] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const loadInstituicoes = async () => {
+    const response = await fetch(getApiUrl("/api/moderador/instituicoes"), {
+      headers: {
+        ...getAuthHeaders(),
+      },
+    });
+
+    if (response.status === 401) {
+      clearAuthSession();
+      navigate("/login");
+      return;
+    }
+
+    if (response.status === 403) {
+      navigate("/dashboard");
+      return;
+    }
+
+    const payload = await response.json();
+
+    if (!response.ok) {
+      throw new Error(payload?.message || "Nao foi possivel carregar as instituicoes.");
+    }
+
+    const mappedInstituicoes: Instituicao[] = (payload.instituicoes || []).map((inst: any) => ({
+      id: String(inst.id),
+      nomeInstituicao: inst.nome,
+      cnpj: inst.cnpj,
+      endereco: inst.endereco,
+      cidade: inst.cidade,
+      estado: inst.estado,
+      cep: inst.cep,
+      telefone: inst.telefone,
+      descricao: inst.descricao,
+      status: inst.status,
+      dataCadastro: inst.data_cadastro,
+    }));
+
+    setInstituicoes(mappedInstituicoes);
+  };
 
   useEffect(() => {
     // Verificar se está logado como moderador
@@ -58,43 +103,18 @@ export function ModeradorPage() {
       return;
     }
 
-    // Carregar instituições (simulado - em produção viria do backend)
-    const instituicoesData = localStorage.getItem("todasInstituicoes");
-    if (instituicoesData) {
-      setInstituicoes(JSON.parse(instituicoesData));
-    } else {
-      // Dados de exemplo
-      const exemplos: Instituicao[] = [
-        {
-          id: "1",
-          nomeInstituicao: "Lar dos Idosos São Francisco",
-          cnpj: "12.345.678/0001-90",
-          endereco: "Rua das Flores, 123",
-          cidade: "Joinville",
-          estado: "SC",
-          cep: "89201-000",
-          telefone: "(47) 3333-4444",
-          descricao: "Instituição dedicada ao cuidado de idosos há 20 anos",
-          status: "pendente",
-          dataCadastro: "2026-03-20",
-        },
-        {
-          id: "2",
-          nomeInstituicao: "Casa de Repouso Vida Plena",
-          cnpj: "98.765.432/0001-10",
-          endereco: "Av. Principal, 456",
-          cidade: "Florianópolis",
-          estado: "SC",
-          cep: "88010-000",
-          telefone: "(48) 9999-8888",
-          descricao: "Cuidando com amor e dedicação de nossos idosos",
-          status: "ativa",
-          dataCadastro: "2026-02-15",
-        },
-      ];
-      setInstituicoes(exemplos);
-      localStorage.setItem("todasInstituicoes", JSON.stringify(exemplos));
-    }
+    const boot = async () => {
+      try {
+        setErrorMessage("");
+        await loadInstituicoes();
+      } catch (error: any) {
+        setErrorMessage(error?.message || "Erro ao carregar instituicoes.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    boot();
   }, [navigate]);
 
   const handleLogout = () => {
@@ -141,31 +161,61 @@ export function ModeradorPage() {
   const confirmAction = () => {
     if (!selectedInstituicao) return;
 
-    const updatedInstituicoes = instituicoes.map((inst) => {
-      if (inst.id === selectedInstituicao.id) {
-        if (actionType === "aprovar" || actionType === "reativar") {
-          return { ...inst, status: "ativa" as const };
-        } else if (actionType === "recusar") {
-          return { ...inst, status: "recusada" as const };
-        } else if (actionType === "desativar") {
-          return { ...inst, status: "desativada" as const };
+    const submit = async () => {
+      try {
+        setIsSubmittingAction(true);
+        setErrorMessage("");
+
+        if (actionType === "excluir") {
+          const response = await fetch(
+            getApiUrl(`/api/moderador/instituicoes/${selectedInstituicao.id}`),
+            {
+              method: "DELETE",
+              headers: {
+                ...getAuthHeaders(),
+              },
+            }
+          );
+
+          if (!response.ok && response.status !== 204) {
+            const payload = await response.json();
+            throw new Error(payload?.message || "Nao foi possivel excluir a instituicao.");
+          }
+        } else {
+          const response = await fetch(
+            getApiUrl(`/api/moderador/instituicoes/${selectedInstituicao.id}/status`),
+            {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+                ...getAuthHeaders(),
+              },
+              body: JSON.stringify({
+                action: actionType,
+                motivoRecusa: motivoRecusa || null,
+              }),
+            }
+          );
+
+          const payload = await response.json();
+
+          if (!response.ok) {
+            throw new Error(payload?.message || "Nao foi possivel atualizar a instituicao.");
+          }
         }
+
+        await loadInstituicoes();
+        setShowActionModal(false);
+        setSelectedInstituicao(null);
+        setMotivoRecusa("");
+      } catch (error: any) {
+        setErrorMessage(error?.message || "Erro ao executar acao de moderacao.");
+      } finally {
+        setIsSubmittingAction(false);
       }
-      return inst;
-    });
+    };
 
-    if (actionType === "excluir") {
-      const filtered = instituicoes.filter((i) => i.id !== selectedInstituicao.id);
-      setInstituicoes(filtered);
-      localStorage.setItem("todasInstituicoes", JSON.stringify(filtered));
-    } else {
-      setInstituicoes(updatedInstituicoes);
-      localStorage.setItem("todasInstituicoes", JSON.stringify(updatedInstituicoes));
-    }
-
-    setShowActionModal(false);
-    setSelectedInstituicao(null);
-    setMotivoRecusa("");
+    submit();
   };
 
   return (
@@ -193,6 +243,25 @@ export function ModeradorPage() {
       </header>
 
       <div className="container mx-auto px-4 py-8">
+        {isLoading && (
+          <div className="flex items-center justify-center py-16">
+            <div className="text-center">
+              <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-teal-600 border-t-transparent mb-3"></div>
+              <p className="text-teal-900">Carregando instituições...</p>
+            </div>
+          </div>
+        )}
+
+        {!isLoading && errorMessage && (
+          <Card className="border-red-200 mb-6">
+            <CardContent className="py-4">
+              <p className="text-red-700">{errorMessage}</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {!isLoading && (
+          <>
         {/* Instituições Pendentes */}
         <Card className="border-teal-200 mb-8">
           <CardHeader className="bg-gradient-to-r from-teal-50 to-rose-50">
@@ -365,6 +434,8 @@ export function ModeradorPage() {
             </div>
           </CardContent>
         </Card>
+          </>
+        )}
       </div>
 
       {/* Modal de Detalhes */}
@@ -546,13 +617,14 @@ export function ModeradorPage() {
             </Button>
             <Button
               onClick={confirmAction}
+              disabled={isSubmittingAction}
               className={
                 actionType === "aprovar" || actionType === "reativar"
                   ? "bg-green-600 hover:bg-green-700 text-white"
                   : "bg-[#E88080] hover:bg-red-600 text-white"
               }
             >
-              Confirmar
+              {isSubmittingAction ? "Processando..." : "Confirmar"}
             </Button>
           </DialogFooter>
         </DialogContent>

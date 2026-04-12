@@ -26,6 +26,7 @@ interface Instituicao {
   cep: string;
   telefone: string;
   descricao: string;
+  status?: string;
 }
 
 export function DashboardPage() {
@@ -80,6 +81,7 @@ export function DashboardPage() {
             cep: instituicaoData.instituicao.cep,
             telefone: instituicaoData.instituicao.telefone,
             descricao: instituicaoData.instituicao.descricao,
+            status: instituicaoData.instituicao.status,
           };
 
           setInstituicao(mappedInstituicao);
@@ -163,6 +165,12 @@ export function DashboardPage() {
     setIsEditingInstituicao(false);
   };
 
+  const instituicaoStatus = String(instituicao?.status || "").toLowerCase();
+  const isInstituicaoAprovada = ["aprovada", "ativa"].includes(instituicaoStatus);
+  const shouldBlockDashboard = Boolean(instituicao && !isInstituicaoAprovada);
+
+  const canCadastrarIdoso = instituicao ? isInstituicaoAprovada : false;
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-teal-50 flex items-center justify-center">
@@ -170,6 +178,70 @@ export function DashboardPage() {
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-teal-600 border-t-transparent mb-4"></div>
           <p className="text-xl text-teal-900">Carregando dashboard...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (shouldBlockDashboard) {
+    const isPendente = instituicaoStatus === "pendente";
+
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-teal-50 flex flex-col">
+        <header className="bg-white/80 backdrop-blur-sm border-b border-teal-100 sticky top-0 z-50">
+          <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Link to="/">
+                <img src={logoGeras} alt="Geras" className="h-12" />
+              </Link>
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="text-teal-900 hidden sm:inline">
+                Olá, {user?.nome || user?.email}
+              </span>
+              <Button
+                variant="outline"
+                className="border-teal-700 text-teal-900 hover:bg-teal-50"
+                onClick={handleLogout}
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Sair
+              </Button>
+            </div>
+          </div>
+        </header>
+
+        <div className="container mx-auto px-4 py-10 flex-1">
+          <Card className="border-yellow-200 bg-yellow-50 max-w-3xl mx-auto">
+            <CardHeader>
+              <CardTitle className="text-2xl text-yellow-900">
+                {isPendente ? "Cadastro em análise" : "Cadastro da instituição indisponível"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-yellow-900 mb-6">
+                {isPendente
+                  ? "Sua instituição ainda não foi aprovada pelo moderador. Assim que a análise for concluída, o dashboard será liberado."
+                  : "Sua instituição foi recusada ou desativada. Entre em contato com o moderador para regularizar o cadastro."}
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <Link to="/instituicoes">
+                  <Button className="bg-[#F7C672] hover:bg-[#f5b85a] text-teal-900">
+                    Ver instituições
+                  </Button>
+                </Link>
+                <Button
+                  variant="outline"
+                  onClick={handleLogout}
+                  className="border-teal-700 text-teal-900 hover:bg-teal-50"
+                >
+                  Sair
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Footer />
       </div>
     );
   }
@@ -456,13 +528,26 @@ export function DashboardPage() {
           <div>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
               <h2 className="text-2xl text-teal-900 mb-4 sm:mb-0">Idosos Cadastrados</h2>
-              <Link to="/cadastrar-idoso">
-                <Button className="bg-[#F7C672] hover:bg-[#f5b85a] text-teal-900">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Cadastrar Novo Idoso
-                </Button>
-              </Link>
+              {canCadastrarIdoso && (
+                <Link to="/cadastrar-idoso">
+                  <Button className="bg-[#F7C672] hover:bg-[#f5b85a] text-teal-900">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Cadastrar Novo Idoso
+                  </Button>
+                </Link>
+              )}
             </div>
+
+            {!canCadastrarIdoso && (
+              <Card className="border-yellow-200 bg-yellow-50 mb-6">
+                <CardContent className="py-4">
+                  <p className="text-yellow-800">
+                    Sua instituição ainda não foi aprovada. O cadastro de idosos será liberado após aprovação do moderador.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
             {idosos.length === 0 ? (
               <Card className="border-teal-200">
                 <CardContent className="py-12 text-center">
@@ -470,12 +555,14 @@ export function DashboardPage() {
                   <p className="text-lg text-teal-700 mb-4">
                     Ainda não há idosos cadastrados
                   </p>
-                  <Link to="/cadastrar-idoso">
-                    <Button className="bg-[#F7C672] hover:bg-[#f5b85a] text-teal-900">
-                      <Plus className="w-4 h-4 mr-2" />
-                      Cadastrar Primeiro Idoso
-                    </Button>
-                  </Link>
+                  {canCadastrarIdoso && (
+                    <Link to="/cadastrar-idoso">
+                      <Button className="bg-[#F7C672] hover:bg-[#f5b85a] text-teal-900">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Cadastrar Primeiro Idoso
+                      </Button>
+                    </Link>
+                  )}
                 </CardContent>
               </Card>
             ) : (

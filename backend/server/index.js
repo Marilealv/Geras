@@ -12,6 +12,7 @@ const PORT = process.env.PORT || 3001;
 const VALID_TIPOS = new Set(["moderador", "donatario"]);
 const JWT_SECRET = process.env.JWT_SECRET || "dev-jwt-secret-change";
 const VALID_IMAGE_TYPES = new Set(["idosos", "instituicoes"]);
+const APPROVED_INSTITUICAO_STATUS = new Set(["aprovada", "ativa"]);
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -65,6 +66,29 @@ function authMiddleware(req, res, next) {
   } catch {
     return res.status(401).json({ message: "Token invalido ou expirado." });
   }
+}
+
+/**
+ * Middleware de autorização para moderadores
+ */
+function moderadorMiddleware(req, res, next) {
+  if (req.user?.tipo !== "moderador") {
+    return res.status(403).json({ message: "Acesso permitido apenas para moderador." });
+  }
+
+  return next();
+}
+
+function mapInstituicaoStatusToUi(status) {
+  if (status === "aprovada") return "ativa";
+  if (status === "rejeitada") return "recusada";
+  return status;
+}
+
+function mapModeradorActionToDbStatus(actionStatus) {
+  if (actionStatus === "aprovar" || actionStatus === "reativar") return "aprovada";
+  if (actionStatus === "recusar" || actionStatus === "desativar") return "rejeitada";
+  return null;
 }
 
 /**
@@ -437,6 +461,114 @@ app.put("/api/instituicoes/me", authMiddleware, async (req, res) => {
 });
 
 // ============================================================================
+// MODERAÇÃO - Gestão de instituições
+// ============================================================================
+
+app.get("/api/moderador/instituicoes", authMiddleware, moderadorMiddleware, async (_, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT inst.id, inst.nome, inst.cnpj, inst.endereco, inst.cidade, inst.estado, inst.cep,
+              inst.telefone, inst.descricao, inst.status, inst.criado_em,
+              u.nome_responsavel, u.email
+       FROM instituicoes inst
+       INNER JOIN usuarios u ON u.id = inst.usuario_id
+       ORDER BY
+         CASE WHEN inst.status = 'pendente' THEN 0 ELSE 1 END,
+         inst.criado_em DESC`
+    );
+
+    const instituicoes = result.rows.map((row) => ({
+      id: row.id,
+      nome: row.nome,
+      cnpj: row.cnpj,
+      endereco: row.endereco,
+      cidade: row.cidade,
+      estado: row.estado,
+      cep: row.cep,
+      telefone: row.telefone,
+      descricao: row.descricao,
+      status: mapInstituicaoStatusToUi(row.status),
+      data_cadastro: row.criado_em,
+      nome_responsavel: row.nome_responsavel,
+      email_responsavel: row.email,
+    }));
+
+    return res.json({ instituicoes });
+  } catch (error) {
+    console.error("Erro ao listar instituicoes para moderacao:", error);
+    return res.status(500).json({ message: "Erro interno ao listar instituicoes." });
+  }
+});
+
+app.patch("/api/moderador/instituicoes/:id/status", authMiddleware, moderadorMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const { action } = req.body ?? {};
+
+  const nextStatus = mapModeradorActionToDbStatus(action);
+
+  if (!nextStatus) {
+    return res.status(400).json({ message: "Acao de moderacao invalida." });
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE instituicoes
+       SET status = $2, atualizado_em = NOW()
+       WHERE id = $1
+       RETURNING id, nome, cnpj, endereco, cidade, estado, cep, telefone, descricao, status, criado_em`,
+      [id, nextStatus]
+    );
+
+    if (!result.rowCount) {
+      return res.status(404).json({ message: "Instituicao nao encontrada." });
+    }
+
+    const instituicao = result.rows[0];
+
+    return res.json({
+      instituicao: {
+        id: instituicao.id,
+        nome: instituicao.nome,
+        cnpj: instituicao.cnpj,
+        endereco: instituicao.endereco,
+        cidade: instituicao.cidade,
+        estado: instituicao.estado,
+        cep: instituicao.cep,
+        telefone: instituicao.telefone,
+        descricao: instituicao.descricao,
+        status: mapInstituicaoStatusToUi(instituicao.status),
+        data_cadastro: instituicao.criado_em,
+      },
+    });
+  } catch (error) {
+    console.error("Erro ao atualizar status da instituicao:", error);
+    return res.status(500).json({ message: "Erro interno ao atualizar status da instituicao." });
+  }
+});
+
+app.delete("/api/moderador/instituicoes/:id", authMiddleware, moderadorMiddleware, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(
+      `DELETE FROM instituicoes
+       WHERE id = $1
+       RETURNING id`,
+      [id]
+    );
+
+    if (!result.rowCount) {
+      return res.status(404).json({ message: "Instituicao nao encontrada." });
+    }
+
+    return res.status(204).send();
+  } catch (error) {
+    console.error("Erro ao excluir instituicao:", error);
+    return res.status(500).json({ message: "Erro interno ao excluir instituicao." });
+  }
+});
+
+// ============================================================================
 // IDOSOS - CRUD
 // ============================================================================
 
@@ -464,7 +596,7 @@ app.post("/api/idosos", authMiddleware, async (req, res) => {
 
   try {
     const instituicaoResult = await pool.query(
-      "SELECT id FROM instituicoes WHERE usuario_id = $1 LIMIT 1",
+      "SELECT id, status FROM instituicoes WHERE usuario_id = $1 LIMIT 1",
       [req.user.id]
     );
 
@@ -472,6 +604,12 @@ app.post("/api/idosos", authMiddleware, async (req, res) => {
 
     if (!instituicao) {
       return res.status(400).json({ message: "Cadastre uma instituicao antes de cadastrar idosos." });
+    }
+
+    if (!APPROVED_INSTITUICAO_STATUS.has(String(instituicao.status || ""))) {
+      return res.status(403).json({
+        message: "A instituicao precisa ser aprovada pelo moderador antes de cadastrar idosos.",
+      });
     }
 
     const idosoResult = await pool.query(
