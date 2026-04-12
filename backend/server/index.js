@@ -552,19 +552,27 @@ app.get("/api/idosos", authMiddleware, async (req, res) => {
  * GET /api/idosos/:id
  * Busca idoso específico com suas necessidades associadas
  */
-app.get("/api/idosos/:id", authMiddleware, async (req, res) => {
+app.get("/api/idosos/:id", async (req, res) => {
   const { id } = req.params;
 
   try {
     const idosoResult = await pool.query(
       `SELECT i.id, i.nome, i.idade, i.data_aniversario, i.imagem_id, img.cloudinary_url AS foto_url,
-              i.historia, i.hobbies, i.musica_favorita, i.comida_favorita
+              i.historia, i.hobbies, i.musica_favorita, i.comida_favorita,
+              inst.id AS instituicao_id,
+              inst.usuario_id AS instituicao_usuario_id,
+              inst.nome AS instituicao_nome,
+              inst.endereco AS instituicao_endereco,
+              inst.cidade AS instituicao_cidade,
+              inst.estado AS instituicao_estado,
+              inst.cep AS instituicao_cep,
+              inst.telefone AS instituicao_telefone
        FROM idosos i
        INNER JOIN instituicoes inst ON inst.id = i.instituicao_id
        LEFT JOIN imagens img ON img.id = i.imagem_id
-       WHERE i.id = $1 AND inst.usuario_id = $2
+       WHERE i.id = $1
        LIMIT 1`,
-      [id, req.user.id]
+      [id]
     );
 
     if (!idosoResult.rowCount) {
@@ -578,7 +586,26 @@ app.get("/api/idosos/:id", authMiddleware, async (req, res) => {
 
     return res.json({
       idoso: {
-        ...idosoResult.rows[0],
+        id: idosoResult.rows[0].id,
+        nome: idosoResult.rows[0].nome,
+        idade: idosoResult.rows[0].idade,
+        data_aniversario: idosoResult.rows[0].data_aniversario,
+        imagem_id: idosoResult.rows[0].imagem_id,
+        foto_url: idosoResult.rows[0].foto_url,
+        historia: idosoResult.rows[0].historia,
+        hobbies: idosoResult.rows[0].hobbies,
+        musica_favorita: idosoResult.rows[0].musica_favorita,
+        comida_favorita: idosoResult.rows[0].comida_favorita,
+        instituicao: {
+          id: idosoResult.rows[0].instituicao_id,
+          usuario_id: idosoResult.rows[0].instituicao_usuario_id,
+          nome: idosoResult.rows[0].instituicao_nome,
+          endereco: idosoResult.rows[0].instituicao_endereco,
+          cidade: idosoResult.rows[0].instituicao_cidade,
+          estado: idosoResult.rows[0].instituicao_estado,
+          cep: idosoResult.rows[0].instituicao_cep,
+          telefone: idosoResult.rows[0].instituicao_telefone,
+        },
         necessidades: necessidadesResult.rows,
       },
     });
@@ -608,33 +635,61 @@ app.put("/api/idosos/:id", authMiddleware, async (req, res) => {
   } = req.body ?? {};
 
   try {
-    const updateResult = await pool.query(
-      `UPDATE idosos i
-       SET nome = COALESCE($3, i.nome),
-           idade = COALESCE($4, i.idade),
-           data_aniversario = COALESCE($5, i.data_aniversario),
-           imagem_id = COALESCE($6, i.imagem_id),
-           historia = COALESCE($7, i.historia),
-           hobbies = COALESCE($8, i.hobbies),
-           musica_favorita = COALESCE($9, i.musica_favorita),
-           comida_favorita = COALESCE($10, i.comida_favorita),
-           atualizado_em = NOW()
-       FROM instituicoes inst
-       WHERE i.id = $1 AND i.instituicao_id = inst.id AND inst.usuario_id = $2
-       RETURNING i.id, i.nome, i.idade, i.data_aniversario, i.imagem_id, i.historia, i.hobbies, i.musica_favorita, i.comida_favorita`,
-      [
-        id,
-        req.user.id,
-        nome,
-        idade,
-        dataAniversario || null,
-        fotoImagemId || null,
-        historia || null,
-        hobbies || null,
-        musicaFavorita || null,
-        comidaFavorita || null,
-      ]
-    );
+    const isModerador = req.user?.tipo === "moderador";
+
+    const updateResult = isModerador
+      ? await pool.query(
+          `UPDATE idosos i
+           SET nome = COALESCE($2, i.nome),
+               idade = COALESCE($3, i.idade),
+               data_aniversario = COALESCE($4, i.data_aniversario),
+               imagem_id = COALESCE($5, i.imagem_id),
+               historia = COALESCE($6, i.historia),
+               hobbies = COALESCE($7, i.hobbies),
+               musica_favorita = COALESCE($8, i.musica_favorita),
+               comida_favorita = COALESCE($9, i.comida_favorita),
+               atualizado_em = NOW()
+           WHERE i.id = $1
+           RETURNING i.id, i.nome, i.idade, i.data_aniversario, i.imagem_id, i.historia, i.hobbies, i.musica_favorita, i.comida_favorita`,
+          [
+            id,
+            nome,
+            idade,
+            dataAniversario || null,
+            fotoImagemId || null,
+            historia || null,
+            hobbies || null,
+            musicaFavorita || null,
+            comidaFavorita || null,
+          ]
+        )
+      : await pool.query(
+          `UPDATE idosos i
+           SET nome = COALESCE($3, i.nome),
+               idade = COALESCE($4, i.idade),
+               data_aniversario = COALESCE($5, i.data_aniversario),
+               imagem_id = COALESCE($6, i.imagem_id),
+               historia = COALESCE($7, i.historia),
+               hobbies = COALESCE($8, i.hobbies),
+               musica_favorita = COALESCE($9, i.musica_favorita),
+               comida_favorita = COALESCE($10, i.comida_favorita),
+               atualizado_em = NOW()
+           FROM instituicoes inst
+           WHERE i.id = $1 AND i.instituicao_id = inst.id AND inst.usuario_id = $2
+           RETURNING i.id, i.nome, i.idade, i.data_aniversario, i.imagem_id, i.historia, i.hobbies, i.musica_favorita, i.comida_favorita`,
+          [
+            id,
+            req.user.id,
+            nome,
+            idade,
+            dataAniversario || null,
+            fotoImagemId || null,
+            historia || null,
+            hobbies || null,
+            musicaFavorita || null,
+            comidaFavorita || null,
+          ]
+        );
 
     if (!updateResult.rowCount) {
       return res.status(404).json({ message: "Idoso nao encontrado." });
@@ -684,13 +739,22 @@ app.delete("/api/idosos/:id", authMiddleware, async (req, res) => {
   const { id } = req.params;
 
   try {
-    const result = await pool.query(
-      `DELETE FROM idosos i
-       USING instituicoes inst
-       WHERE i.id = $1 AND i.instituicao_id = inst.id AND inst.usuario_id = $2
-       RETURNING i.id`,
-      [id, req.user.id]
-    );
+    const isModerador = req.user?.tipo === "moderador";
+
+    const result = isModerador
+      ? await pool.query(
+          `DELETE FROM idosos i
+           WHERE i.id = $1
+           RETURNING i.id`,
+          [id]
+        )
+      : await pool.query(
+          `DELETE FROM idosos i
+           USING instituicoes inst
+           WHERE i.id = $1 AND i.instituicao_id = inst.id AND inst.usuario_id = $2
+           RETURNING i.id`,
+          [id, req.user.id]
+        );
 
     if (!result.rowCount) {
       return res.status(404).json({ message: "Idoso nao encontrado." });

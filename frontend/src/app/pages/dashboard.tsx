@@ -415,20 +415,7 @@ export function DashboardPage() {
           </Card>
         )}
 
-        {/* Quick Actions */}
-        {instituicao ? (
-          <div className="mb-8">
-            <h2 className="text-2xl text-teal-900 mb-4">Ações Rápidas</h2>
-            <div className="grid md:grid-cols-2 gap-4">
-              <Link to="/cadastrar-idoso">
-                <Button className="w-full bg-[#F7C672] hover:bg-[#f5b85a] text-teal-900 py-6 text-lg">
-                  <Plus className="w-5 h-5 mr-2" />
-                  Cadastrar Novo Idoso
-                </Button>
-              </Link>
-            </div>
-          </div>
-        ) : (
+        {!instituicao && (
           <div className="mb-8">
             <Card className="border-teal-200">
               <CardContent className="py-12 text-center">

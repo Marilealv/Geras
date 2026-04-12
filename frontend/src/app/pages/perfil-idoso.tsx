@@ -37,16 +37,51 @@ interface Idoso {
   necessidades?: Necessidade[];
 }
 
+interface InstituicaoPerfil {
+  usuarioId: number;
+  nomeInstituicao: string;
+  endereco?: string;
+  cidade?: string;
+  estado?: string;
+  cep?: string;
+  telefone?: string;
+}
+
+interface AuthUser {
+  id: number;
+  tipo: "moderador" | "donatario";
+}
+
 export function PerfilIdosoPage() {
   const { id } = useParams();
   const idosoId = Number(id);
   const navigate = useNavigate();
   const [idoso, setIdoso] = useState<Idoso | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [instituicao, setInstituicao] = useState<any>(null);
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [instituicao, setInstituicao] = useState<InstituicaoPerfil | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedIdoso, setEditedIdoso] = useState<Idoso | null>(null);
+
+  useEffect(() => {
+    const userData = localStorage.getItem("user");
+    if (!userData) {
+      return;
+    }
+
+    try {
+      const parsedUser = JSON.parse(userData);
+      if (parsedUser?.id && parsedUser?.tipo) {
+        setAuthUser({
+          id: Number(parsedUser.id),
+          tipo: parsedUser.tipo,
+        });
+      }
+    } catch {
+      setAuthUser(null);
+    }
+  }, []);
 
   // Função para calcular idade a partir da data de nascimento
   const calculateAge = (birthDate: string): number => {
@@ -69,25 +104,11 @@ export function PerfilIdosoPage() {
 
     const loadData = async () => {
       try {
-        const [idosoResponse, instituicaoResponse] = await Promise.all([
-          fetch(getApiUrl(`/api/idosos/${idosoId}`), {
-            headers: {
-              ...getAuthHeaders(),
-            },
-          }),
-          fetch(getApiUrl("/api/instituicoes/me"), {
-            headers: {
-              ...getAuthHeaders(),
-            },
-          }),
-        ]);
-
-        if (idosoResponse.status === 401 || instituicaoResponse.status === 401) {
-          clearAuthSession();
-          navigate("/login");
-          setIsLoading(false);
-          return;
-        }
+        const idosoResponse = await fetch(getApiUrl(`/api/idosos/${idosoId}`), {
+          headers: {
+            ...getAuthHeaders(),
+          },
+        });
 
         if (idosoResponse.ok) {
           const idosoPayload = await idosoResponse.json();
@@ -115,18 +136,16 @@ export function PerfilIdosoPage() {
 
           setIdoso(mappedIdoso);
           setEditedIdoso(mappedIdoso);
-        }
 
-        if (instituicaoResponse.ok) {
-          const instituicaoPayload = await instituicaoResponse.json();
-          if (instituicaoPayload.instituicao) {
+          if (apiIdoso.instituicao) {
             setInstituicao({
-              nomeInstituicao: instituicaoPayload.instituicao.nome,
-              endereco: instituicaoPayload.instituicao.endereco,
-              cidade: instituicaoPayload.instituicao.cidade,
-              estado: instituicaoPayload.instituicao.estado,
-              cep: instituicaoPayload.instituicao.cep,
-              telefone: instituicaoPayload.instituicao.telefone,
+              usuarioId: apiIdoso.instituicao.usuario_id,
+              nomeInstituicao: apiIdoso.instituicao.nome,
+              endereco: apiIdoso.instituicao.endereco,
+              cidade: apiIdoso.instituicao.cidade,
+              estado: apiIdoso.instituicao.estado,
+              cep: apiIdoso.instituicao.cep,
+              telefone: apiIdoso.instituicao.telefone,
             });
           }
         }
@@ -144,7 +163,16 @@ export function PerfilIdosoPage() {
 
         const instituicaoData = localStorage.getItem("instituicao");
         if (instituicaoData) {
-          setInstituicao(JSON.parse(instituicaoData));
+          const parsedInstituicao = JSON.parse(instituicaoData);
+          setInstituicao({
+            usuarioId: 0,
+            nomeInstituicao: parsedInstituicao.nomeInstituicao,
+            endereco: parsedInstituicao.endereco,
+            cidade: parsedInstituicao.cidade,
+            estado: parsedInstituicao.estado,
+            cep: parsedInstituicao.cep,
+            telefone: parsedInstituicao.telefone,
+          });
         }
       } finally {
         setIsLoading(false);
@@ -152,14 +180,23 @@ export function PerfilIdosoPage() {
     };
 
     loadData();
-  }, [idosoId, navigate]);
+  }, [idosoId]);
+
+  const canManageProfile =
+    authUser?.tipo === "moderador" ||
+    (authUser?.tipo === "donatario" && authUser.id === instituicao?.usuarioId);
+  const isEditMode = Boolean(canManageProfile && isEditing);
+  const backPath = authUser ? "/dashboard" : "/";
 
   const handleEdit = () => {
+    if (!canManageProfile) {
+      return;
+    }
     setIsEditing(true);
   };
 
   const handleSave = async () => {
-    if (!editedIdoso || !idosoId) return;
+    if (!canManageProfile || !editedIdoso || !idosoId) return;
 
     // Recalcular idade baseado na data de nascimento antes de salvar
     if (editedIdoso.dataAniversario) {
@@ -225,9 +262,9 @@ export function PerfilIdosoPage() {
       <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-teal-50 flex items-center justify-center">
         <div className="text-center">
           <p className="text-xl text-teal-900 mb-4">Idoso não encontrado</p>
-          <Link to="/dashboard">
+          <Link to={backPath}>
             <Button className="bg-[#F7C672] hover:bg-[#f5b85a] text-teal-900">
-              Voltar ao Dashboard
+              Voltar
             </Button>
           </Link>
         </div>
@@ -235,11 +272,11 @@ export function PerfilIdosoPage() {
     );
   }
 
-  const urgentes = (isEditing ? editedIdoso?.necessidades : idoso.necessidades)?.filter((n) => n.tipo === "urgente") || [];
-  const desejados = (isEditing ? editedIdoso?.necessidades : idoso.necessidades)?.filter((n) => n.tipo === "desejado") || [];
+  const urgentes = (isEditMode ? editedIdoso?.necessidades : idoso.necessidades)?.filter((n) => n.tipo === "urgente") || [];
+  const desejados = (isEditMode ? editedIdoso?.necessidades : idoso.necessidades)?.filter((n) => n.tipo === "desejado") || [];
 
   const handleDeleteIdoso = () => {
-    if (!idosoId) return;
+    if (!canManageProfile || !idosoId) return;
 
     const deleteByApi = async () => {
       try {
@@ -266,13 +303,13 @@ export function PerfilIdosoPage() {
         localStorage.setItem("idosos", JSON.stringify(idososAtualizados));
       }
 
-      navigate("/dashboard");
+      navigate(backPath);
     };
 
     deleteByApi();
   };
 
-  const displayIdoso = isEditing ? editedIdoso : idoso;
+  const displayIdoso = isEditMode ? editedIdoso : idoso;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-teal-50 flex flex-col">
@@ -285,7 +322,7 @@ export function PerfilIdosoPage() {
             </Link>
           </div>
           <div className="flex items-center gap-2 sm:gap-4">
-            {instituicao && (
+            {authUser && instituicao && (
               <Link to="/dashboard">
                 <Button
                   variant="outline"
@@ -296,7 +333,7 @@ export function PerfilIdosoPage() {
                 </Button>
               </Link>
             )}
-            <Link to="/dashboard">
+            <Link to={backPath}>
               <Button
                 variant="outline"
                 className="border-teal-700 text-teal-900 hover:bg-teal-50"
@@ -325,7 +362,7 @@ export function PerfilIdosoPage() {
               </div>
             )}
             <div className="text-center md:text-left flex-1">
-              {isEditing ? (
+              {isEditMode ? (
                 <Input
                   value={editedIdoso?.nome || ""}
                   onChange={(e) =>
@@ -339,10 +376,10 @@ export function PerfilIdosoPage() {
                 <h1 className="text-4xl md:text-5xl mb-2">{displayIdoso?.nome}</h1>
               )}
               <p className="text-xl text-teal-100">{displayIdoso?.idade} anos</p>
-              {(displayIdoso?.dataAniversario || isEditing) && (
+              {(displayIdoso?.dataAniversario || isEditMode) && (
                 <div className="flex items-center gap-2 mt-2 text-teal-100 justify-center md:justify-start">
                   <Calendar className="w-5 h-5" />
-                  {isEditing ? (
+                  {isEditMode ? (
                     <div className="flex items-center gap-2">
                       <span className="text-sm">Aniversário:</span>
                       <Input
@@ -386,7 +423,7 @@ export function PerfilIdosoPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {isEditing ? (
+                {isEditMode ? (
                   <textarea
                     value={editedIdoso?.historia || ""}
                     onChange={(e) =>
@@ -405,14 +442,14 @@ export function PerfilIdosoPage() {
 
             {/* Preferências */}
             <div className="grid md:grid-cols-3 gap-4">
-              {(displayIdoso?.hobbies || isEditing) && (
+              {(displayIdoso?.hobbies || isEditMode) && (
                 <Card className="border-teal-200">
                   <CardContent className="pt-6">
                     <div className="flex items-center gap-2 mb-2">
                       <Smile className="w-5 h-5 text-teal-600" />
                       <h3 className="text-teal-900 font-medium">Hobbies</h3>
                     </div>
-                    {isEditing ? (
+                    {isEditMode ? (
                       <Input
                         value={editedIdoso?.hobbies || ""}
                         onChange={(e) =>
@@ -430,14 +467,14 @@ export function PerfilIdosoPage() {
                 </Card>
               )}
 
-              {(displayIdoso?.musicaFavorita || isEditing) && (
+              {(displayIdoso?.musicaFavorita || isEditMode) && (
                 <Card className="border-teal-200">
                   <CardContent className="pt-6">
                     <div className="flex items-center gap-2 mb-2">
                       <Music className="w-5 h-5 text-teal-600" />
                       <h3 className="text-teal-900 font-medium">Música</h3>
                     </div>
-                    {isEditing ? (
+                    {isEditMode ? (
                       <Input
                         value={editedIdoso?.musicaFavorita || ""}
                         onChange={(e) =>
@@ -455,14 +492,14 @@ export function PerfilIdosoPage() {
                 </Card>
               )}
 
-              {(displayIdoso?.comidaFavorita || isEditing) && (
+              {(displayIdoso?.comidaFavorita || isEditMode) && (
                 <Card className="border-teal-200">
                   <CardContent className="pt-6">
                     <div className="flex items-center gap-2 mb-2">
                       <Utensils className="w-5 h-5 text-teal-600" />
                       <h3 className="text-teal-900 font-medium">Comida</h3>
                     </div>
-                    {isEditing ? (
+                    {isEditMode ? (
                       <Input
                         value={editedIdoso?.comidaFavorita || ""}
                         onChange={(e) =>
@@ -580,7 +617,7 @@ export function PerfilIdosoPage() {
             )}
 
             {/* Botões de Ação */}
-            {isEditing ? (
+            {isEditMode ? (
               <div className="space-y-3">
                 <Button
                   onClick={handleSave}
@@ -597,7 +634,7 @@ export function PerfilIdosoPage() {
                   Cancelar
                 </Button>
               </div>
-            ) : (
+            ) : canManageProfile ? (
               <>
                 <Button
                   onClick={handleEdit}
@@ -616,7 +653,7 @@ export function PerfilIdosoPage() {
                   Excluir Idoso
                 </Button>
               </>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
