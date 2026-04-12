@@ -5,6 +5,7 @@ import logoGeras from "../../imports/geras.png";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Footer } from "../components/footer";
+import { getApiUrl } from "../config/api";
 import { getAuthToken } from "../lib/auth";
 
 interface Idoso {
@@ -16,6 +17,7 @@ interface Idoso {
 }
 
 interface Instituicao {
+  id: string;
   nomeInstituicao: string;
   cnpj: string;
   endereco: string;
@@ -31,9 +33,9 @@ interface HeaderUser {
 }
 
 export function InstituicoesPage() {
-  const [instituicao, setInstituicao] = useState<Instituicao | null>(null);
-  const [idosos, setIdosos] = useState<Idoso[]>([]);
+  const [instituicoes, setInstituicoes] = useState<Instituicao[]>([]);
   const [headerUser, setHeaderUser] = useState<HeaderUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const token = getAuthToken();
@@ -50,17 +52,44 @@ export function InstituicoesPage() {
       }
     }
 
-    // Carregar instituição
-    const instituicaoData = localStorage.getItem("instituicao");
-    if (instituicaoData) {
-      setInstituicao(JSON.parse(instituicaoData));
-    }
+    const loadPublicInstituicoes = async () => {
+      try {
+        const response = await fetch(getApiUrl("/api/instituicoes/publicas"));
+        const payload = await response.json();
 
-    // Carregar idosos
-    const idososData = localStorage.getItem("idosos");
-    if (idososData) {
-      setIdosos(JSON.parse(idososData));
-    }
+        if (!response.ok) {
+          setInstituicoes([]);
+          return;
+        }
+
+        const mappedInstituicoes: Instituicao[] = (payload.instituicoes || []).map((inst: any) => ({
+          id: String(inst.id),
+          nomeInstituicao: inst.nome,
+          cnpj: inst.cnpj,
+          endereco: inst.endereco,
+          cidade: inst.cidade,
+          estado: inst.estado,
+          cep: inst.cep,
+          telefone: inst.telefone,
+          descricao: inst.descricao,
+          idosos: (inst.idosos || []).map((idoso: any) => ({
+            id: String(idoso.id),
+            nome: idoso.nome,
+            idade: idoso.idade,
+            foto: idoso.foto_url,
+            historia: idoso.historia,
+          })),
+        }));
+
+        setInstituicoes(mappedInstituicoes);
+      } catch {
+        setInstituicoes([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadPublicInstituicoes();
   }, []);
 
   const quickAccessPath = headerUser?.tipo === "moderador" ? "/moderador" : "/dashboard";
@@ -115,7 +144,14 @@ export function InstituicoesPage() {
 
       {/* Content */}
       <div className="flex-grow container mx-auto px-4 py-12">
-        {!instituicao ? (
+        {isLoading ? (
+          <Card className="border-teal-200 max-w-2xl mx-auto">
+            <CardContent className="py-12 text-center">
+              <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-teal-600 border-t-transparent mb-4"></div>
+              <p className="text-teal-700">Carregando instituições...</p>
+            </CardContent>
+          </Card>
+        ) : instituicoes.length === 0 ? (
           <Card className="border-teal-200 max-w-2xl mx-auto">
             <CardContent className="py-12 text-center">
               <Heart className="w-16 h-16 mx-auto text-teal-300 mb-4" />
@@ -134,107 +170,105 @@ export function InstituicoesPage() {
           </Card>
         ) : (
           <div className="space-y-8">
-            {/* Card da Instituição */}
-            <Card className="border-teal-200 shadow-lg">
-              <CardHeader className="bg-gradient-to-r from-teal-50 to-rose-50">
-                <CardTitle className="text-3xl text-teal-900">
-                  {instituicao.nomeInstituicao}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-6">
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div>
-                    <h3 className="text-lg font-medium text-teal-900 mb-4">
-                      Sobre a Instituição
-                    </h3>
-                    <p className="text-teal-800 mb-4">{instituicao.descricao}</p>
-                    <div className="text-sm text-teal-700">
-                      <p className="font-medium">CNPJ: {instituicao.cnpj}</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="bg-teal-50 rounded-lg p-4">
-                      <div className="flex items-start gap-3">
-                        <MapPin className="w-5 h-5 text-teal-600 mt-1" />
-                        <div>
-                          <h4 className="font-medium text-teal-900 mb-1">Endereço</h4>
-                          <p className="text-teal-700">{instituicao.endereco}</p>
-                          <p className="text-teal-700">
-                            {instituicao.cidade} - {instituicao.estado}
-                          </p>
-                          <p className="text-teal-700">CEP: {instituicao.cep}</p>
-                        </div>
+            {instituicoes.map((instituicao) => (
+              <Card key={instituicao.id} className="border-teal-200 shadow-lg">
+                <CardHeader className="bg-gradient-to-r from-teal-50 to-rose-50">
+                  <CardTitle className="text-3xl text-teal-900">
+                    {instituicao.nomeInstituicao}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-6">
+                  <div className="grid md:grid-cols-2 gap-6 mb-8">
+                    <div>
+                      <h3 className="text-lg font-medium text-teal-900 mb-4">
+                        Sobre a Instituição
+                      </h3>
+                      <p className="text-teal-800 mb-4">{instituicao.descricao}</p>
+                      <div className="text-sm text-teal-700">
+                        <p className="font-medium">CNPJ: {instituicao.cnpj}</p>
                       </div>
                     </div>
 
-                    <div className="bg-teal-50 rounded-lg p-4">
-                      <div className="flex items-start gap-3">
-                        <Phone className="w-5 h-5 text-teal-600 mt-1" />
-                        <div>
-                          <h4 className="font-medium text-teal-900 mb-1">Contato</h4>
-                          <p className="text-teal-700">{instituicao.telefone}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Lista de Idosos */}
-            <div>
-              <div className="flex items-center gap-3 mb-6">
-                <Users className="w-8 h-8 text-teal-600" />
-                <h2 className="text-3xl text-teal-900">
-                  Nossos Idosos ({idosos.length})
-                </h2>
-              </div>
-
-              {idosos.length === 0 ? (
-                <Card className="border-teal-200">
-                  <CardContent className="py-12 text-center">
-                    <Users className="w-16 h-16 mx-auto text-teal-300 mb-4" />
-                    <p className="text-lg text-teal-700">
-                      Ainda não há idosos cadastrados nesta instituição
-                    </p>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {idosos.map((idoso) => (
-                    <Link key={idoso.id} to={`/perfil-idoso/${idoso.id}`}>
-                      <Card className="border-teal-200 hover:shadow-xl transition-all cursor-pointer h-full">
-                        <CardContent className="p-6">
-                          <div className="flex flex-col items-center text-center">
-                            {idoso.foto ? (
-                              <img
-                                src={idoso.foto}
-                                alt={idoso.nome}
-                                className="w-24 h-24 rounded-full object-cover mb-4 border-4 border-teal-100"
-                              />
-                            ) : (
-                              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-teal-100 to-rose-100 flex items-center justify-center mb-4 border-4 border-teal-100">
-                                <Users className="w-12 h-12 text-teal-600" />
-                              </div>
-                            )}
-                            <h3 className="text-xl text-teal-900 mb-1">
-                              {idoso.nome}
-                            </h3>
-                            <p className="text-teal-600 mb-3">{idoso.idade} anos</p>
-                            {idoso.historia && (
-                              <p className="text-sm text-teal-700 line-clamp-3">
-                                {idoso.historia}
-                              </p>
-                            )}
+                    <div className="space-y-4">
+                      <div className="bg-teal-50 rounded-lg p-4">
+                        <div className="flex items-start gap-3">
+                          <MapPin className="w-5 h-5 text-teal-600 mt-1" />
+                          <div>
+                            <h4 className="font-medium text-teal-900 mb-1">Endereço</h4>
+                            <p className="text-teal-700">{instituicao.endereco}</p>
+                            <p className="text-teal-700">
+                              {instituicao.cidade} - {instituicao.estado}
+                            </p>
+                            <p className="text-teal-700">CEP: {instituicao.cep}</p>
                           </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-teal-50 rounded-lg p-4">
+                        <div className="flex items-start gap-3">
+                          <Phone className="w-5 h-5 text-teal-600 mt-1" />
+                          <div>
+                            <h4 className="font-medium text-teal-900 mb-1">Contato</h4>
+                            <p className="text-teal-700">{instituicao.telefone}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center gap-3 mb-6">
+                      <Users className="w-8 h-8 text-teal-600" />
+                      <h2 className="text-3xl text-teal-900">
+                        Nossos Idosos ({instituicao.idosos.length})
+                      </h2>
+                    </div>
+
+                    {instituicao.idosos.length === 0 ? (
+                      <Card className="border-teal-200">
+                        <CardContent className="py-12 text-center">
+                          <Users className="w-16 h-16 mx-auto text-teal-300 mb-4" />
+                          <p className="text-lg text-teal-700">
+                            Ainda não há idosos cadastrados nesta instituição
+                          </p>
                         </CardContent>
                       </Card>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
+                    ) : (
+                      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {instituicao.idosos.map((idoso) => (
+                          <Link key={idoso.id} to={`/perfil-idoso/${idoso.id}`}>
+                            <Card className="border-teal-200 hover:shadow-xl transition-all cursor-pointer h-full">
+                              <CardContent className="p-6">
+                                <div className="flex flex-col items-center text-center">
+                                  {idoso.foto ? (
+                                    <img
+                                      src={idoso.foto}
+                                      alt={idoso.nome}
+                                      className="w-24 h-24 rounded-full object-cover mb-4 border-4 border-teal-100"
+                                    />
+                                  ) : (
+                                    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-teal-100 to-rose-100 flex items-center justify-center mb-4 border-4 border-teal-100">
+                                      <Users className="w-12 h-12 text-teal-600" />
+                                    </div>
+                                  )}
+                                  <h3 className="text-xl text-teal-900 mb-1">{idoso.nome}</h3>
+                                  <p className="text-teal-600 mb-3">{idoso.idade} anos</p>
+                                  {idoso.historia && (
+                                    <p className="text-sm text-teal-700 line-clamp-3">
+                                      {idoso.historia}
+                                    </p>
+                                  )}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         )}
       </div>

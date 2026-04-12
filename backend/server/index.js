@@ -416,6 +416,68 @@ app.get("/api/instituicoes/me", authMiddleware, async (req, res) => {
   }
 });
 
+app.get("/api/instituicoes/publicas", async (_, res) => {
+  try {
+    const instituicoesResult = await pool.query(
+      `SELECT inst.id, inst.nome, inst.cnpj, inst.endereco, inst.cidade, inst.estado,
+              inst.cep, inst.telefone, inst.descricao, inst.status
+       FROM instituicoes inst
+       WHERE inst.status IN ('aprovada', 'ativa')
+       ORDER BY inst.criado_em DESC`
+    );
+
+    const instituicoes = instituicoesResult.rows;
+
+    if (!instituicoes.length) {
+      return res.json({ instituicoes: [] });
+    }
+
+    const instituicaoIds = instituicoes.map((inst) => inst.id);
+
+    const idososResult = await pool.query(
+      `SELECT i.id, i.instituicao_id, i.nome, i.idade, i.historia, img.cloudinary_url AS foto_url
+       FROM idosos i
+       LEFT JOIN imagens img ON img.id = i.imagem_id
+       WHERE i.instituicao_id = ANY($1::bigint[])
+       ORDER BY i.criado_em DESC`,
+      [instituicaoIds]
+    );
+
+    const idososByInstituicaoId = new Map();
+
+    idososResult.rows.forEach((idoso) => {
+      const existing = idososByInstituicaoId.get(idoso.instituicao_id) || [];
+      existing.push({
+        id: idoso.id,
+        nome: idoso.nome,
+        idade: idoso.idade,
+        historia: idoso.historia,
+        foto_url: idoso.foto_url,
+      });
+      idososByInstituicaoId.set(idoso.instituicao_id, existing);
+    });
+
+    const payload = instituicoes.map((inst) => ({
+      id: inst.id,
+      nome: inst.nome,
+      cnpj: inst.cnpj,
+      endereco: inst.endereco,
+      cidade: inst.cidade,
+      estado: inst.estado,
+      cep: inst.cep,
+      telefone: inst.telefone,
+      descricao: inst.descricao,
+      status: mapInstituicaoStatusToUi(inst.status),
+      idosos: idososByInstituicaoId.get(inst.id) || [],
+    }));
+
+    return res.json({ instituicoes: payload });
+  } catch (error) {
+    console.error("Erro ao listar instituicoes publicas:", error);
+    return res.status(500).json({ message: "Erro interno ao listar instituicoes publicas." });
+  }
+});
+
 /**
  * PUT /api/instituicoes/me
  * Atualiza dados da instituição do usuário (suporta atualização parcial)
