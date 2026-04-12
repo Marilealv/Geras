@@ -1,11 +1,44 @@
-import { Link } from "react-router";
+import { useEffect, useState } from "react";
+import { Link, useLocation } from "react-router";
 import { Heart } from "lucide-react";
 import logoGeras from "../../imports/geras.png";
 import elderlyHandsFlower from "../../imports/elderly-hands-flower.jpg";
 import { Button } from "../components/ui/button";
 import { Footer } from "../components/footer";
+import { getAuthToken } from "../lib/auth";
+
+interface HeaderUser {
+  tipo: "moderador" | "donatario";
+}
 
 export function HomePage() {
+  const location = useLocation();
+  const [headerUser, setHeaderUser] = useState<HeaderUser | null>(null);
+
+  useEffect(() => {
+    const token = getAuthToken();
+    const userData = localStorage.getItem("user");
+
+    if (!token || !userData) {
+      setHeaderUser(null);
+      return;
+    }
+
+    try {
+      const parsedUser = JSON.parse(userData);
+      if (parsedUser?.tipo === "moderador" || parsedUser?.tipo === "donatario") {
+        setHeaderUser({ tipo: parsedUser.tipo });
+        return;
+      }
+      setHeaderUser(null);
+    } catch {
+      setHeaderUser(null);
+    }
+  }, [location.key]);
+
+  const quickAccessPath = headerUser?.tipo === "moderador" ? "/moderador" : "/dashboard";
+  const quickAccessLabel = headerUser?.tipo === "moderador" ? "Moderador" : "Minha instituição";
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-teal-50 flex flex-col">
       {/* Header */}
@@ -27,11 +60,19 @@ export function HomePage() {
               Instituições
             </Link>
           </nav>
-          <Link to="/login">
-            <Button className="bg-[#F7C672] hover:bg-[#f5b85a] text-teal-900">
-              Entrar
-            </Button>
-          </Link>
+          {headerUser ? (
+            <Link to={quickAccessPath}>
+              <Button className="bg-[#F7C672] hover:bg-[#f5b85a] text-teal-900">
+                {quickAccessLabel}
+              </Button>
+            </Link>
+          ) : (
+            <Link to="/login">
+              <Button className="bg-[#F7C672] hover:bg-[#f5b85a] text-teal-900">
+                Entrar
+              </Button>
+            </Link>
+          )}
         </div>
       </header>
 

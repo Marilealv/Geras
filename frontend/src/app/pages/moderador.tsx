@@ -4,6 +4,7 @@ import { LogOut, CheckCircle, XCircle, Eye, Trash2, Ban, Building2, RefreshCw, U
 import logoGeras from "../../imports/geras.png";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { clearAuthSession } from "../lib/auth";
 import {
   Dialog,
   DialogContent,
@@ -41,6 +42,19 @@ export function ModeradorPage() {
     const userData = localStorage.getItem("user");
     if (!userData) {
       navigate("/login");
+      return;
+    }
+
+    let parsedUser: { tipo?: string } | null = null;
+    try {
+      parsedUser = JSON.parse(userData);
+    } catch {
+      navigate("/login");
+      return;
+    }
+
+    if (parsedUser?.tipo !== "moderador") {
+      navigate("/dashboard");
       return;
     }
 
@@ -84,7 +98,7 @@ export function ModeradorPage() {
   }, [navigate]);
 
   const handleLogout = () => {
-    localStorage.removeItem("user");
+    clearAuthSession();
     navigate("/");
   };
 

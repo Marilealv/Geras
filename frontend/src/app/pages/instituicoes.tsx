@@ -5,6 +5,7 @@ import logoGeras from "../../imports/geras.png";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Footer } from "../components/footer";
+import { getAuthToken } from "../lib/auth";
 
 interface Idoso {
   id: string;
@@ -25,11 +26,30 @@ interface Instituicao {
   descricao: string;
 }
 
+interface HeaderUser {
+  tipo: "moderador" | "donatario";
+}
+
 export function InstituicoesPage() {
   const [instituicao, setInstituicao] = useState<Instituicao | null>(null);
   const [idosos, setIdosos] = useState<Idoso[]>([]);
+  const [headerUser, setHeaderUser] = useState<HeaderUser | null>(null);
 
   useEffect(() => {
+    const token = getAuthToken();
+    const userData = localStorage.getItem("user");
+
+    if (token && userData) {
+      try {
+        const parsedUser = JSON.parse(userData);
+        if (parsedUser?.tipo === "moderador" || parsedUser?.tipo === "donatario") {
+          setHeaderUser({ tipo: parsedUser.tipo });
+        }
+      } catch {
+        setHeaderUser(null);
+      }
+    }
+
     // Carregar instituição
     const instituicaoData = localStorage.getItem("instituicao");
     if (instituicaoData) {
@@ -42,6 +62,9 @@ export function InstituicoesPage() {
       setIdosos(JSON.parse(idososData));
     }
   }, []);
+
+  const quickAccessPath = headerUser?.tipo === "moderador" ? "/moderador" : "/dashboard";
+  const quickAccessLabel = headerUser?.tipo === "moderador" ? "Moderador" : "Minha instituição";
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-teal-50 flex flex-col">
@@ -64,11 +87,19 @@ export function InstituicoesPage() {
               Instituições
             </Link>
           </nav>
-          <Link to="/login">
-            <Button className="bg-[#F7C672] hover:bg-[#f5b85a] text-teal-900">
-              Entrar
-            </Button>
-          </Link>
+          {headerUser ? (
+            <Link to={quickAccessPath}>
+              <Button className="bg-[#F7C672] hover:bg-[#f5b85a] text-teal-900">
+                {quickAccessLabel}
+              </Button>
+            </Link>
+          ) : (
+            <Link to="/login">
+              <Button className="bg-[#F7C672] hover:bg-[#f5b85a] text-teal-900">
+                Entrar
+              </Button>
+            </Link>
+          )}
         </div>
       </header>
 

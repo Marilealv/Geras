@@ -32,6 +32,7 @@ export function DashboardPage() {
   const navigate = useNavigate();
   const [idosos, setIdosos] = useState<Idoso[]>([]);
   const [user, setUser] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [instituicao, setInstituicao] = useState<Instituicao | null>(null);
   const [isEditingInstituicao, setIsEditingInstituicao] = useState(false);
   const [editedInstituicao, setEditedInstituicao] = useState<Instituicao | null>(null);
@@ -109,6 +110,8 @@ export function DashboardPage() {
           setInstituicao(inst);
           setEditedInstituicao(inst);
         }
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -159,6 +162,17 @@ export function DashboardPage() {
     setEditedInstituicao(instituicao);
     setIsEditingInstituicao(false);
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-teal-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-teal-600 border-t-transparent mb-4"></div>
+          <p className="text-xl text-teal-900">Carregando dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-teal-50 flex flex-col">

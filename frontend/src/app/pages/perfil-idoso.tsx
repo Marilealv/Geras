@@ -188,6 +188,8 @@ export function PerfilIdosoPage() {
     (authUser?.tipo === "moderador" ||
       (authUser?.tipo === "donatario" && authUser.id === instituicao?.usuarioId));
   const isEditMode = Boolean(canManageProfile && isEditing);
+  const quickAccessPath = authUser?.tipo === "moderador" ? "/moderador" : "/dashboard";
+  const quickAccessLabel = authUser?.tipo === "moderador" ? "Moderador" : "Minha instituição";
   const backPath = authUser ? "/dashboard" : "/";
 
   const handleEdit = () => {
@@ -324,14 +326,14 @@ export function PerfilIdosoPage() {
             </Link>
           </div>
           <div className="flex items-center gap-2 sm:gap-4">
-            {authUser && instituicao && (
-              <Link to="/dashboard">
+            {authUser && (
+              <Link to={quickAccessPath}>
                 <Button
                   variant="outline"
                   className="border-teal-700 text-teal-900 hover:bg-teal-50"
                 >
                   <Building2 className="w-4 h-4 mr-0 sm:mr-2" />
-                  <span className="hidden sm:inline">Ir para instituição</span>
+                  <span className="hidden sm:inline">{quickAccessLabel}</span>
                 </Button>
               </Link>
             )}
