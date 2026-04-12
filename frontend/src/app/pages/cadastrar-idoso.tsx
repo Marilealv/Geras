@@ -46,6 +46,23 @@ export function CadastrarIdosoPage() {
     });
   };
 
+  const validateStep1 = () => {
+    if (!formData.nome.trim()) {
+      setErrorMessage("Nome completo é obrigatório.");
+      return false;
+    }
+    if (!formData.idade.trim()) {
+      setErrorMessage("Idade é obrigatória.");
+      return false;
+    }
+    if (isNaN(Number(formData.idade)) || Number(formData.idade) <= 0) {
+      setErrorMessage("Idade deve ser um número válido maior que zero.");
+      return false;
+    }
+    setErrorMessage("");
+    return true;
+  };
+
   const handleAddNecessidade = () => {
     if (!novoItem.trim()) return;
 
@@ -192,6 +209,7 @@ export function CadastrarIdosoPage() {
             {/* Step 1: Dados Básicos */}
             {step === 1 && (
               <div className="space-y-6">
+                {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
                 <div>
                   <Label htmlFor="nome" className="text-teal-900">
                     Nome Completo
@@ -257,7 +275,11 @@ export function CadastrarIdosoPage() {
 
                 <Button
                   type="button"
-                  onClick={() => setStep(2)}
+                  onClick={() => {
+                    if (validateStep1()) {
+                      setStep(2);
+                    }
+                  }}
                   className="w-full bg-[#F7C672] hover:bg-[#f5b85a] text-teal-900 py-6 text-lg"
                 >
                   Próximo: História do Idoso
@@ -268,6 +290,7 @@ export function CadastrarIdosoPage() {
             {/* Step 2: História */}
             {step === 2 && (
               <div className="space-y-6">
+                {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
                 <div>
                   <Label htmlFor="historia" className="text-teal-900">
                     História do Idoso
@@ -353,6 +376,7 @@ export function CadastrarIdosoPage() {
             {/* Step 3: Necessidades */}
             {step === 3 && (
               <div className="space-y-6">
+                {errorMessage && <p className="text-sm text-red-600 font-medium">{errorMessage}</p>}
                 <div>
                   <Label className="text-teal-900">
                     Adicionar Necessidades e Desejos
@@ -476,8 +500,6 @@ export function CadastrarIdosoPage() {
                     {isLoading ? "Salvando..." : "Finalizar Cadastro"}
                   </Button>
                 </div>
-
-                {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
               </div>
             )}
           </form>

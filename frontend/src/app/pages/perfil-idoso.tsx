@@ -42,6 +42,7 @@ export function PerfilIdosoPage() {
   const idosoId = Number(id);
   const navigate = useNavigate();
   const [idoso, setIdoso] = useState<Idoso | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [instituicao, setInstituicao] = useState<any>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -62,6 +63,7 @@ export function PerfilIdosoPage() {
 
   useEffect(() => {
     if (!idosoId || Number.isNaN(idosoId)) {
+      setIsLoading(false);
       return;
     }
 
@@ -83,6 +85,7 @@ export function PerfilIdosoPage() {
         if (idosoResponse.status === 401 || instituicaoResponse.status === 401) {
           clearAuthSession();
           navigate("/login");
+          setIsLoading(false);
           return;
         }
 
@@ -143,6 +146,8 @@ export function PerfilIdosoPage() {
         if (instituicaoData) {
           setInstituicao(JSON.parse(instituicaoData));
         }
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -203,6 +208,17 @@ export function PerfilIdosoPage() {
     setEditedIdoso(idoso);
     setIsEditing(false);
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-teal-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-teal-600 border-t-transparent mb-4"></div>
+          <p className="text-xl text-teal-900">Carregando perfil...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!idoso) {
     return (
@@ -343,7 +359,10 @@ export function PerfilIdosoPage() {
                   ) : (
                     <span>
                       Aniversário:{" "}
-                      {new Date(displayIdoso.dataAniversario).toLocaleDateString("pt-BR")}
+                      {new Date(displayIdoso.dataAniversario).toLocaleDateString("pt-BR", {
+                        month: "long",
+                        day: "numeric",
+                      })}
                     </span>
                   )}
                 </div>
