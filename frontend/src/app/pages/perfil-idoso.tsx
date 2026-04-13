@@ -16,7 +16,7 @@ import {
 } from "../components/ui/dialog";
 import { Footer } from "../components/footer";
 import { getApiUrl } from "../config/api";
-import { clearAuthSession, getAuthHeaders, getAuthToken } from "../lib/auth";
+import { clearAuthSession, getAuthHeaders, getAuthToken, hydrateAuthSessionFromToken } from "../lib/auth";
 
 interface Necessidade {
   id: number;
@@ -65,6 +65,8 @@ export function PerfilIdosoPage() {
   const [editedIdoso, setEditedIdoso] = useState<Idoso | null>(null);
 
   useEffect(() => {
+    hydrateAuthSessionFromToken();
+
     const userData = localStorage.getItem("user");
     if (!userData) {
       return;
@@ -400,10 +402,12 @@ export function PerfilIdosoPage() {
                   ) : (
                     <span>
                       Aniversário:{" "}
-                      {new Date(displayIdoso.dataAniversario).toLocaleDateString("pt-BR", {
-                        month: "long",
-                        day: "numeric",
-                      })}
+                      {displayIdoso?.dataAniversario
+                        ? new Date(displayIdoso.dataAniversario).toLocaleDateString("pt-BR", {
+                            month: "long",
+                            day: "numeric",
+                          })
+                        : "Nao informado"}
                     </span>
                   )}
                 </div>

@@ -1,6 +1,7 @@
 import cors from "cors";
 import express from "express";
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import multer from "multer";
 import streamifier from "streamifier";
@@ -13,6 +14,8 @@ const VALID_TIPOS = new Set(["moderador", "donatario"]);
 const JWT_SECRET = process.env.JWT_SECRET || "dev-jwt-secret-change";
 const VALID_IMAGE_TYPES = new Set(["idosos", "instituicoes"]);
 const APPROVED_INSTITUICAO_STATUS = new Set(["aprovada", "ativa"]);
+const MAX_FAILED_LOGIN_ATTEMPTS = 5;
+const LOGIN_LOCK_MINUTES = 5;
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -28,25 +31,88 @@ function normalizeEmail(email) {
 
 /**
  * Cria token JWT para autenticação
- * Expira em 1 dia
+ * Expira em 1 hora
  */
 function createToken(user) {
+  const tokenId = crypto.randomUUID();
+
   return jwt.sign(
     {
       sub: user.id,
       email: user.email,
       tipo: user.tipo_usuario,
+      jti: tokenId,
     },
     JWT_SECRET,
-    { expiresIn: "1d" }
+    { expiresIn: "1h" }
   );
+}
+
+function hashToken(token) {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+function getDateFromUnixSeconds(unixSeconds) {
+  if (!Number.isFinite(unixSeconds)) {
+    return null;
+  }
+
+  return new Date(unixSeconds * 1000);
+}
+
+function buildLockedAccountMessage() {
+  return `Conta bloqueada temporariamente. Tente novamente em ${LOGIN_LOCK_MINUTES} minutos.`;
+}
+
+async function getActiveLoginBlock(email) {
+  const result = await pool.query(
+    `SELECT bloqueado_ate
+     FROM auth_tentativas_login
+     WHERE email = $1 AND bloqueado_ate IS NOT NULL AND bloqueado_ate > NOW()
+     LIMIT 1`,
+    [email]
+  );
+
+  return result.rows[0]?.bloqueado_ate ?? null;
+}
+
+async function registerFailedLoginAttempt(email) {
+  const result = await pool.query(
+    `INSERT INTO auth_tentativas_login (email, tentativas_falhas, bloqueado_ate, ultima_falha_em, atualizado_em)
+     VALUES ($1, 1, NULL, NOW(), NOW())
+     ON CONFLICT (email)
+     DO UPDATE SET
+       tentativas_falhas = CASE
+         WHEN auth_tentativas_login.bloqueado_ate IS NOT NULL AND auth_tentativas_login.bloqueado_ate <= NOW() THEN 1
+         ELSE auth_tentativas_login.tentativas_falhas + 1
+       END,
+       ultima_falha_em = NOW(),
+       bloqueado_ate = CASE
+         WHEN (
+           CASE
+             WHEN auth_tentativas_login.bloqueado_ate IS NOT NULL AND auth_tentativas_login.bloqueado_ate <= NOW() THEN 1
+             ELSE auth_tentativas_login.tentativas_falhas + 1
+           END
+         ) >= $2 THEN NOW() + ($3 * INTERVAL '1 minute')
+         ELSE NULL
+       END,
+       atualizado_em = NOW()
+     RETURNING tentativas_falhas, bloqueado_ate`,
+    [email, MAX_FAILED_LOGIN_ATTEMPTS, LOGIN_LOCK_MINUTES]
+  );
+
+  return result.rows[0] ?? { tentativas_falhas: 1, bloqueado_ate: null };
+}
+
+async function clearFailedLoginAttempts(email) {
+  await pool.query("DELETE FROM auth_tentativas_login WHERE email = $1", [email]);
 }
 
 /**
  * Middleware de autenticação
  * Valida token Bearer e extrai dados do usuário para req.user
  */
-function authMiddleware(req, res, next) {
+async function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
 
   if (!authHeader?.startsWith("Bearer ")) {
@@ -57,11 +123,43 @@ function authMiddleware(req, res, next) {
 
   try {
     const payload = jwt.verify(token, JWT_SECRET);
+
+    if (typeof payload !== "object" || payload === null) {
+      return res.status(401).json({ message: "Token invalido ou expirado." });
+    }
+
+    const tokenHash = hashToken(token);
+    let revokedTokenResult;
+
+    try {
+      revokedTokenResult = await pool.query(
+        "SELECT 1 FROM auth_tokens_revogados WHERE token_hash = $1 AND expira_em > NOW() LIMIT 1",
+        [tokenHash]
+      );
+    } catch (error) {
+      console.error("Erro ao verificar token revogado:", error);
+      return res.status(500).json({ message: "Erro ao validar autenticacao." });
+    }
+
+    if (revokedTokenResult.rowCount) {
+      return res.status(401).json({ message: "Token invalidado. Faca login novamente." });
+    }
+
+    const expiresAt = getDateFromUnixSeconds(Number(payload.exp));
+
     req.user = {
       id: payload.sub,
       email: payload.email,
       tipo: payload.tipo,
     };
+
+    req.auth = {
+      token,
+      tokenHash,
+      tokenId: payload.jti,
+      expiresAt,
+    };
+
     return next();
   } catch {
     return res.status(401).json({ message: "Token invalido ou expirado." });
@@ -87,6 +185,7 @@ function mapInstituicaoStatusToUi(status) {
 
 function mapModeradorActionToDbStatus(actionStatus) {
   if (actionStatus === "aprovar" || actionStatus === "reativar") return "aprovada";
+  if (actionStatus === "pendenciar") return "pendente";
   if (actionStatus === "recusar" || actionStatus === "desativar") return "rejeitada";
   return null;
 }
@@ -207,22 +306,52 @@ app.post("/api/auth/login", async (req, res) => {
   }
 
   try {
+    const normalizedEmail = normalizeEmail(email);
+    const blockedUntil = await getActiveLoginBlock(normalizedEmail);
+
+    if (blockedUntil) {
+      return res.status(423).json({
+        message: buildLockedAccountMessage(),
+        bloqueadoAte: blockedUntil,
+      });
+    }
+
     const result = await pool.query(
       "SELECT id, email, senha, tipo_usuario, nome_responsavel, telefone FROM usuarios WHERE email = $1 LIMIT 1",
-      [normalizeEmail(email)]
+      [normalizedEmail]
     );
 
     const user = result.rows[0];
 
     if (!user) {
+      const loginAttempt = await registerFailedLoginAttempt(normalizedEmail);
+
+      if (loginAttempt?.bloqueado_ate) {
+        return res.status(423).json({
+          message: buildLockedAccountMessage(),
+          bloqueadoAte: loginAttempt.bloqueado_ate,
+        });
+      }
+
       return res.status(401).json({ message: "Email ou senha invalidos." });
     }
 
     const isValidPassword = await bcrypt.compare(senha, user.senha);
 
     if (!isValidPassword) {
+      const loginAttempt = await registerFailedLoginAttempt(normalizedEmail);
+
+      if (loginAttempt?.bloqueado_ate) {
+        return res.status(423).json({
+          message: buildLockedAccountMessage(),
+          bloqueadoAte: loginAttempt.bloqueado_ate,
+        });
+      }
+
       return res.status(401).json({ message: "Email ou senha invalidos." });
     }
+
+    await clearFailedLoginAttempts(normalizedEmail);
 
     const token = createToken(user);
 
@@ -238,7 +367,44 @@ app.post("/api/auth/login", async (req, res) => {
     });
   } catch (error) {
     console.error("Erro no login:", error);
+
+    if (error?.code === "42P01") {
+      return res.status(500).json({
+        message: "Estrutura de seguranca de autenticacao nao encontrada. Rode o SQL 002_auth_security.sql.",
+      });
+    }
+
     return res.status(500).json({ message: "Erro interno ao autenticar." });
+  }
+});
+
+app.post("/api/auth/logout", authMiddleware, async (req, res) => {
+  try {
+    const tokenHash = req.auth?.tokenHash;
+    const expiresAt = req.auth?.expiresAt;
+
+    if (!tokenHash || !expiresAt) {
+      return res.status(400).json({ message: "Token de autenticacao invalido para logout." });
+    }
+
+    await pool.query(
+      `INSERT INTO auth_tokens_revogados (token_hash, usuario_id, expira_em)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (token_hash) DO NOTHING`,
+      [tokenHash, req.user.id, expiresAt]
+    );
+
+    return res.status(204).send();
+  } catch (error) {
+    console.error("Erro no logout:", error);
+
+    if (error?.code === "42P01") {
+      return res.status(500).json({
+        message: "Estrutura de seguranca de autenticacao nao encontrada. Rode o SQL 002_auth_security.sql.",
+      });
+    }
+
+    return res.status(500).json({ message: "Erro interno ao finalizar sessao." });
   }
 });
 
@@ -401,7 +567,8 @@ app.get("/api/instituicoes/me", authMiddleware, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT inst.id, inst.nome, inst.cnpj, inst.endereco, inst.cidade, inst.estado, inst.cep,
-              inst.telefone, inst.descricao, inst.imagem_id, img.cloudinary_url AS imagem_url, inst.status
+              inst.telefone, inst.descricao, inst.imagem_id, img.cloudinary_url AS imagem_url,
+              inst.status, inst.motivo_recusa
        FROM instituicoes inst
        LEFT JOIN imagens img ON img.id = inst.imagem_id
        WHERE inst.usuario_id = $1
@@ -530,7 +697,7 @@ app.get("/api/moderador/instituicoes", authMiddleware, moderadorMiddleware, asyn
   try {
     const result = await pool.query(
       `SELECT inst.id, inst.nome, inst.cnpj, inst.endereco, inst.cidade, inst.estado, inst.cep,
-              inst.telefone, inst.descricao, inst.status, inst.criado_em,
+              inst.telefone, inst.descricao, inst.status, inst.motivo_recusa, inst.criado_em,
               u.nome_responsavel, u.email
        FROM instituicoes inst
        INNER JOIN usuarios u ON u.id = inst.usuario_id
@@ -549,6 +716,7 @@ app.get("/api/moderador/instituicoes", authMiddleware, moderadorMiddleware, asyn
       cep: row.cep,
       telefone: row.telefone,
       descricao: row.descricao,
+      motivo_recusa: row.motivo_recusa,
       status: mapInstituicaoStatusToUi(row.status),
       data_cadastro: row.criado_em,
       nome_responsavel: row.nome_responsavel,
@@ -564,7 +732,7 @@ app.get("/api/moderador/instituicoes", authMiddleware, moderadorMiddleware, asyn
 
 app.patch("/api/moderador/instituicoes/:id/status", authMiddleware, moderadorMiddleware, async (req, res) => {
   const { id } = req.params;
-  const { action } = req.body ?? {};
+  const { action, motivoRecusa } = req.body ?? {};
 
   const nextStatus = mapModeradorActionToDbStatus(action);
 
@@ -572,13 +740,22 @@ app.patch("/api/moderador/instituicoes/:id/status", authMiddleware, moderadorMid
     return res.status(400).json({ message: "Acao de moderacao invalida." });
   }
 
+  const normalizedMotivoRecusa = String(motivoRecusa || "").trim();
+
+  if (action === "recusar" && !normalizedMotivoRecusa) {
+    return res.status(400).json({ message: "Motivo da recusa e obrigatorio." });
+  }
+
   try {
     const result = await pool.query(
       `UPDATE instituicoes
-       SET status = $2, atualizado_em = NOW()
+       SET status = $2,
+           motivo_recusa = CASE WHEN $3::text = 'recusar' THEN $4 ELSE NULL END,
+           atualizado_em = NOW()
        WHERE id = $1
-       RETURNING id, nome, cnpj, endereco, cidade, estado, cep, telefone, descricao, status, criado_em`,
-      [id, nextStatus]
+       RETURNING id, nome, cnpj, endereco, cidade, estado, cep, telefone, descricao,
+                 status, motivo_recusa, criado_em`,
+      [id, nextStatus, action, normalizedMotivoRecusa || null]
     );
 
     if (!result.rowCount) {
@@ -598,6 +775,7 @@ app.patch("/api/moderador/instituicoes/:id/status", authMiddleware, moderadorMid
         cep: instituicao.cep,
         telefone: instituicao.telefone,
         descricao: instituicao.descricao,
+        motivo_recusa: instituicao.motivo_recusa,
         status: mapInstituicaoStatusToUi(instituicao.status),
         data_cadastro: instituicao.criado_em,
       },

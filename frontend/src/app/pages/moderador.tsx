@@ -5,7 +5,7 @@ import logoGeras from "../../imports/geras.png";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { getApiUrl } from "../config/api";
-import { clearAuthSession, getAuthHeaders } from "../lib/auth";
+import { clearAuthSession, getAuthHeaders, hydrateAuthSessionFromToken, logoutFromServer } from "../lib/auth";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +25,7 @@ interface Instituicao {
   cep: string;
   telefone: string;
   descricao: string;
+  motivoRecusa?: string | null;
   status: "pendente" | "ativa" | "desativada" | "recusada";
   dataCadastro: string;
 }
@@ -35,7 +36,7 @@ export function ModeradorPage() {
   const [selectedInstituicao, setSelectedInstituicao] = useState<Instituicao | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showActionModal, setShowActionModal] = useState(false);
-  const [actionType, setActionType] = useState<"aprovar" | "recusar" | "desativar" | "excluir" | "reativar">("aprovar");
+  const [actionType, setActionType] = useState<"aprovar" | "recusar" | "desativar" | "excluir" | "reativar" | "pendenciar">("aprovar");
   const [motivoRecusa, setMotivoRecusa] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmittingAction, setIsSubmittingAction] = useState(false);
@@ -75,6 +76,7 @@ export function ModeradorPage() {
       cep: inst.cep,
       telefone: inst.telefone,
       descricao: inst.descricao,
+      motivoRecusa: inst.motivo_recusa,
       status: inst.status,
       dataCadastro: inst.data_cadastro,
     }));
@@ -83,6 +85,8 @@ export function ModeradorPage() {
   };
 
   useEffect(() => {
+    hydrateAuthSessionFromToken();
+
     // Verificar se está logado como moderador
     const userData = localStorage.getItem("user");
     if (!userData) {
@@ -117,8 +121,8 @@ export function ModeradorPage() {
     boot();
   }, [navigate]);
 
-  const handleLogout = () => {
-    clearAuthSession();
+  const handleLogout = async () => {
+    await logoutFromServer();
     navigate("/");
   };
 
@@ -440,12 +444,12 @@ export function ModeradorPage() {
 
       {/* Modal de Detalhes */}
       <Dialog open={showDetailsModal} onOpenChange={setShowDetailsModal}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
-          <DialogHeader>
+        <DialogContent className="w-[96vw] sm:max-w-3xl p-0 overflow-hidden">
+          <DialogHeader className="px-6 pt-6 pb-2 border-b border-teal-100">
             <DialogTitle className="text-2xl text-teal-900">Detalhes da Instituição</DialogTitle>
           </DialogHeader>
           {selectedInstituicao && (
-            <div className="space-y-4 pr-2">
+            <div className="max-h-[68vh] overflow-y-auto px-6 py-4 space-y-4">
               <div>
                 <h3 className="font-medium text-teal-900 mb-2">Informações Básicas</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-teal-50 rounded-lg p-4">
@@ -491,9 +495,18 @@ export function ModeradorPage() {
                   <p className="text-teal-900 break-words whitespace-pre-wrap">{selectedInstituicao.descricao}</p>
                 </div>
               </div>
+
+              {selectedInstituicao.motivoRecusa && selectedInstituicao.status === "recusada" && (
+                <div>
+                  <h3 className="font-medium text-teal-900 mb-2">Motivo da Recusa</h3>
+                  <div className="bg-red-50 rounded-lg p-4 border border-red-100 min-w-0">
+                    <p className="text-red-900 break-words whitespace-pre-wrap">{selectedInstituicao.motivoRecusa}</p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
-          <DialogFooter className="flex-col sm:flex-row gap-2">
+          <DialogFooter className="px-6 py-4 border-t border-teal-100 flex-col sm:flex-row gap-2">
             <Button
               variant="outline"
               onClick={() => {
@@ -548,6 +561,28 @@ export function ModeradorPage() {
                 Reativar Conta
               </Button>
             )}
+            {selectedInstituicao?.status === "recusada" && (
+              <>
+                <Button
+                  onClick={() => {
+                    setShowDetailsModal(false);
+                    handleAction(selectedInstituicao, "pendenciar");
+                  }}
+                  className="bg-amber-500 hover:bg-amber-600 text-white w-full sm:w-auto"
+                >
+                  Voltar para Pendente
+                </Button>
+                <Button
+                  onClick={() => {
+                    setShowDetailsModal(false);
+                    handleAction(selectedInstituicao, "aprovar");
+                  }}
+                  className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto"
+                >
+                  Aprovar Agora
+                </Button>
+              </>
+            )}
             <Button
               onClick={() => {
                 setShowDetailsModal(false);
@@ -577,6 +612,7 @@ export function ModeradorPage() {
               {actionType === "recusar" && "Recusar Instituição"}
               {actionType === "desativar" && "Desativar Conta"}
               {actionType === "reativar" && "Reativar Conta"}
+              {actionType === "pendenciar" && "Voltar para Pendente"}
               {actionType === "excluir" && "Excluir Conta"}
             </DialogTitle>
             <DialogDescription>
@@ -588,6 +624,8 @@ export function ModeradorPage() {
                 "Tem certeza que deseja desativar esta conta? A instituição não poderá mais acessar o sistema."}
               {actionType === "reativar" &&
                 "Tem certeza que deseja reativar esta conta? A instituição voltará a ter acesso ao sistema."}
+              {actionType === "pendenciar" &&
+                "Tem certeza que deseja voltar esta instituição para pendente? Ela voltará para a fila de análise."}
               {actionType === "excluir" &&
                 "Tem certeza que deseja excluir permanentemente esta conta? Esta ação não pode ser desfeita."}
             </DialogDescription>
@@ -619,7 +657,7 @@ export function ModeradorPage() {
               onClick={confirmAction}
               disabled={isSubmittingAction}
               className={
-                actionType === "aprovar" || actionType === "reativar"
+                actionType === "aprovar" || actionType === "reativar" || actionType === "pendenciar"
                   ? "bg-green-600 hover:bg-green-700 text-white"
                   : "bg-[#E88080] hover:bg-red-600 text-white"
               }

@@ -60,6 +60,30 @@ Autentica usuário e retorna token JWT
 }
 ```
 
+**Regras de segurança**:
+- Após 5 tentativas falhas consecutivas, a conta (por email) fica bloqueada por 5 minutos.
+- Durante o bloqueio, o endpoint retorna status `423 Locked`.
+
+**Response** (423):
+```json
+{
+  "message": "Conta bloqueada temporariamente. Tente novamente em 5 minutos.",
+  "bloqueadoAte": "2026-04-13T15:45:00.000Z"
+}
+```
+
+### POST `/auth/logout` - Logout
+Revoga o token atual para impedir reutilizacao em novas requisicoes.
+
+**Headers**:
+- `Authorization: Bearer {token}` (obrigatorio)
+
+**Response** (204): sem conteudo
+
+**Observacoes**:
+- Token revogado passa a retornar `401` nas rotas protegidas.
+- A revogacao vale ate o vencimento natural do JWT.
+
 ---
 
 ## 📸 Upload de Imagens
@@ -321,6 +345,14 @@ cloud_name/
 ```json
 {
   "message": "Token invalido ou expirado."
+}
+```
+
+### 423 - Locked
+```json
+{
+  "message": "Conta bloqueada temporariamente. Tente novamente em 5 minutos.",
+  "bloqueadoAte": "2026-04-13T15:45:00.000Z"
 }
 ```
 

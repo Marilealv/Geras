@@ -6,7 +6,7 @@ import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Footer } from "../components/footer";
 import { getApiUrl } from "../config/api";
-import { getAuthToken } from "../lib/auth";
+import { getAuthToken, hydrateAuthSessionFromToken } from "../lib/auth";
 
 interface Idoso {
   id: string;
@@ -38,6 +38,8 @@ export function InstituicoesPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    hydrateAuthSessionFromToken();
+
     const token = getAuthToken();
     const userData = localStorage.getItem("user");
 

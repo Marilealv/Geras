@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Input } from "../components/ui/input";
 import { Footer } from "../components/footer";
 import { getApiUrl } from "../config/api";
-import { clearAuthSession, getAuthHeaders } from "../lib/auth";
+import { clearAuthSession, getAuthHeaders, hydrateAuthSessionFromToken, logoutFromServer } from "../lib/auth";
 
 interface Idoso {
   id: number;
@@ -26,6 +26,7 @@ interface Instituicao {
   cep: string;
   telefone: string;
   descricao: string;
+  motivoRecusa?: string | null;
   status?: string;
 }
 
@@ -40,6 +41,8 @@ export function DashboardPage() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   useEffect(() => {
+    hydrateAuthSessionFromToken();
+
     const userData = localStorage.getItem("user");
     if (!userData) {
       navigate("/login");
@@ -81,6 +84,7 @@ export function DashboardPage() {
             cep: instituicaoData.instituicao.cep,
             telefone: instituicaoData.instituicao.telefone,
             descricao: instituicaoData.instituicao.descricao,
+            motivoRecusa: instituicaoData.instituicao.motivo_recusa,
             status: instituicaoData.instituicao.status,
           };
 
@@ -120,8 +124,8 @@ export function DashboardPage() {
     loadDashboardData();
   }, [navigate]);
 
-  const handleLogout = () => {
-    clearAuthSession();
+  const handleLogout = async () => {
+    await logoutFromServer();
     navigate("/");
   };
 
@@ -223,6 +227,12 @@ export function DashboardPage() {
                   ? "Sua instituição ainda não foi aprovada pelo moderador. Assim que a análise for concluída, o dashboard será liberado."
                   : "Sua instituição foi recusada ou desativada. Entre em contato com o moderador para regularizar o cadastro."}
               </p>
+              {!isPendente && instituicao?.motivoRecusa && (
+                <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4">
+                  <p className="text-sm font-medium text-red-900 mb-1">Motivo informado pelo moderador</p>
+                  <p className="text-red-900 whitespace-pre-wrap">{instituicao.motivoRecusa}</p>
+                </div>
+              )}
               <div className="flex flex-wrap gap-3">
                 <Link to="/instituicoes">
                   <Button className="bg-[#F7C672] hover:bg-[#f5b85a] text-teal-900">

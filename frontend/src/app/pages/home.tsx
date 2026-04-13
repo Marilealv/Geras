@@ -5,7 +5,7 @@ import logoGeras from "../../imports/geras.png";
 import elderlyHandsFlower from "../../imports/elderly-hands-flower.jpg";
 import { Button } from "../components/ui/button";
 import { Footer } from "../components/footer";
-import { getAuthToken } from "../lib/auth";
+import { getAuthToken, hydrateAuthSessionFromToken } from "../lib/auth";
 
 interface HeaderUser {
   tipo: "moderador" | "donatario";
@@ -16,6 +16,8 @@ export function HomePage() {
   const [headerUser, setHeaderUser] = useState<HeaderUser | null>(null);
 
   useEffect(() => {
+    hydrateAuthSessionFromToken();
+
     const token = getAuthToken();
     const userData = localStorage.getItem("user");
 
