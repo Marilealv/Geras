@@ -482,7 +482,7 @@ export function ModeradorPage() {
           <div className="flex items-center justify-center py-16">
             <div className="text-center">
               <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-teal-600 border-t-transparent mb-3"></div>
-              <p className="text-teal-900">Carregando instituições...</p>
+              <p className="text-teal-900">Carregando painel...</p>
             </div>
           </div>
         )}
