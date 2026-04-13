@@ -17,11 +17,24 @@ import { getApiUrl } from "../config/api";
 import { getAuthHeaders } from "../lib/auth";
 import { uploadImageToCloudinary } from "../lib/uploads";
 
+interface InstituicaoBusca {
+  id: number;
+  nome: string;
+  cnpj: string;
+  cidade: string;
+  estado: string;
+  status: string;
+}
+
 export function CadastrarInstituicaoPage() {
   const navigate = useNavigate();
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [jaCadastrada, setJaCadastrada] = useState(false);
+  const [buscaInstituicao, setBuscaInstituicao] = useState("");
+  const [resultadosBusca, setResultadosBusca] = useState<InstituicaoBusca[]>([]);
+  const [instituicaoSelecionada, setInstituicaoSelecionada] = useState<InstituicaoBusca | null>(null);
   const [imagem, setImagem] = useState<File | null>(null);
   const [formData, setFormData] = useState({
     nomeInstituicao: "",
@@ -50,6 +63,33 @@ export function CadastrarInstituicaoPage() {
     setIsLoading(true);
 
     try {
+      if (jaCadastrada) {
+        if (!instituicaoSelecionada) {
+          setErrorMessage("Selecione uma instituicao para solicitar vinculo.");
+          return;
+        }
+
+        const response = await fetch(
+          getApiUrl(`/api/instituicoes/${instituicaoSelecionada.id}/solicitar-vinculo`),
+          {
+            method: "POST",
+            headers: {
+              ...getAuthHeaders(),
+            },
+          }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          setErrorMessage(data.message || "Nao foi possivel solicitar o vinculo.");
+          return;
+        }
+
+        setShowSuccessModal(true);
+        return;
+      }
+
       let imagemId: number | null = null;
       let imagemUrlLocal: string | null = null;
 
@@ -98,6 +138,23 @@ export function CadastrarInstituicaoPage() {
     }
   };
 
+  const handleBuscarInstituicoes = async () => {
+    const query = buscaInstituicao.trim();
+
+    if (query.length < 2) {
+      setResultadosBusca([]);
+      return;
+    }
+
+    try {
+      const response = await fetch(getApiUrl(`/api/instituicoes/search?query=${encodeURIComponent(query)}`));
+      const payload = await response.json();
+      setResultadosBusca(payload.instituicoes || []);
+    } catch {
+      setResultadosBusca([]);
+    }
+  };
+
   const handleCloseModal = () => {
     setShowSuccessModal(false);
     navigate("/dashboard");
@@ -113,14 +170,84 @@ export function CadastrarInstituicaoPage() {
           </Link>
           <h1 className="text-3xl text-teal-900">Cadastrar Instituição</h1>
           <p className="text-teal-700 mt-2">
-            Preencha os dados da sua instituição
+            Preencha os dados da sua instituição ou solicite vinculo com uma instituição já cadastrada
           </p>
         </div>
 
         {/* Form */}
         <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl p-8 border border-teal-100">
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid md:grid-cols-2 gap-6">
+            <div className="rounded-lg border border-teal-200 bg-teal-50 p-4">
+              <p className="text-teal-900 font-medium mb-3">Sua instituição já está cadastrada?</p>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 text-teal-900">
+                  <input
+                    type="radio"
+                    name="jaCadastrada"
+                    checked={!jaCadastrada}
+                    onChange={() => {
+                      setJaCadastrada(false);
+                      setInstituicaoSelecionada(null);
+                    }}
+                  />
+                  Não, vou cadastrar agora
+                </label>
+                <label className="flex items-center gap-2 text-teal-900">
+                  <input
+                    type="radio"
+                    name="jaCadastrada"
+                    checked={jaCadastrada}
+                    onChange={() => setJaCadastrada(true)}
+                  />
+                  Sim, quero solicitar vínculo
+                </label>
+              </div>
+            </div>
+
+            {jaCadastrada ? (
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="buscaInstituicao" className="text-teal-900">
+                    Buscar instituição por nome ou CNPJ
+                  </Label>
+                  <div className="mt-2 flex gap-2">
+                    <Input
+                      id="buscaInstituicao"
+                      value={buscaInstituicao}
+                      onChange={(e) => setBuscaInstituicao(e.target.value)}
+                      placeholder="Digite nome ou CNPJ"
+                      className="border-teal-200 focus:border-teal-500"
+                    />
+                    <Button type="button" onClick={handleBuscarInstituicoes} className="bg-teal-700 hover:bg-teal-800 text-white">
+                      Buscar
+                    </Button>
+                  </div>
+                </div>
+
+                {resultadosBusca.length > 0 && (
+                  <div className="rounded-lg border border-teal-200 divide-y divide-teal-100">
+                    {resultadosBusca.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setInstituicaoSelecionada(item)}
+                        className={`w-full text-left px-4 py-3 hover:bg-teal-50 ${instituicaoSelecionada?.id === item.id ? "bg-teal-100" : "bg-white"}`}
+                      >
+                        <p className="text-teal-900 font-medium">{item.nome}</p>
+                        <p className="text-sm text-teal-700">{item.cnpj} • {item.cidade}/{item.estado}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {instituicaoSelecionada && (
+                  <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-green-900">
+                    Instituição selecionada: {instituicaoSelecionada.nome}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="grid md:grid-cols-2 gap-6">
               <div className="md:col-span-2">
                 <Label htmlFor="imagem" className="text-teal-900">
                   Imagem da Instituicao (opcional)
@@ -262,6 +389,7 @@ export function CadastrarInstituicaoPage() {
                 />
               </div>
             </div>
+            )}
 
             {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
 
@@ -270,7 +398,7 @@ export function CadastrarInstituicaoPage() {
               disabled={isLoading}
               className="w-full bg-[#F7C672] hover:bg-[#f5b85a] text-teal-900 py-6 text-lg"
             >
-              {isLoading ? "Enviando..." : "Finalizar Cadastro"}
+              {isLoading ? "Enviando..." : jaCadastrada ? "Solicitar Vinculo" : "Finalizar Cadastro"}
             </Button>
           </form>
         </div>
@@ -287,7 +415,9 @@ export function CadastrarInstituicaoPage() {
             <DialogHeader>
               <DialogTitle className="text-2xl text-teal-900">Solicitação Enviada!</DialogTitle>
               <DialogDescription className="text-base text-teal-700 pt-4">
-                Sua inscrição foi submetida ao moderador do Geras, que irá avaliar os dados e aprovar caso esteja tudo correto.
+                {jaCadastrada
+                  ? "Sua solicitacao de vinculo foi enviada. Ela pode ser aprovada por um moderador ou por um usuario ja vinculado na instituicao."
+                  : "Sua inscrição foi submetida ao moderador do Geras, que irá avaliar os dados e aprovar caso esteja tudo correto."}
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>

@@ -30,6 +30,18 @@ interface Instituicao {
   dataCadastro: string;
 }
 
+interface ModeradorUsuario {
+  id: number;
+  nome_responsavel: string;
+  email: string;
+  telefone: string;
+  tipo_usuario: "moderador" | "donatario";
+  bloqueado: boolean;
+  precisa_trocar_senha: boolean;
+  instituicoes_aprovadas: string;
+  vinculos_pendentes: string;
+}
+
 export function ModeradorPage() {
   const navigate = useNavigate();
   const [instituicoes, setInstituicoes] = useState<Instituicao[]>([]);
@@ -38,9 +50,11 @@ export function ModeradorPage() {
   const [showActionModal, setShowActionModal] = useState(false);
   const [actionType, setActionType] = useState<"aprovar" | "recusar" | "desativar" | "excluir" | "reativar" | "pendenciar">("aprovar");
   const [motivoRecusa, setMotivoRecusa] = useState("");
+  const [activeSection, setActiveSection] = useState<"menu" | "instituicoes" | "usuarios">("menu");
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmittingAction, setIsSubmittingAction] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [usuarios, setUsuarios] = useState<ModeradorUsuario[]>([]);
 
   const loadInstituicoes = async () => {
     const response = await fetch(getApiUrl("/api/moderador/instituicoes"), {
@@ -84,6 +98,53 @@ export function ModeradorPage() {
     setInstituicoes(mappedInstituicoes);
   };
 
+  const loadUsuarios = async () => {
+    const response = await fetch(getApiUrl("/api/moderador/usuarios"), {
+      headers: {
+        ...getAuthHeaders(),
+      },
+    });
+
+    if (!response.ok) {
+      const payload = await response.json();
+      throw new Error(payload?.message || "Nao foi possivel carregar os usuarios.");
+    }
+
+    const payload = await response.json();
+    setUsuarios(payload.usuarios || []);
+  };
+
+  const handleUserAction = async (userId: number, action: string) => {
+    const body: Record<string, unknown> = { action };
+
+    if (action === "trocarSenha") {
+      const novaSenha = window.prompt("Digite a nova senha para o usuario:");
+      if (!novaSenha) return;
+      body.novaSenha = novaSenha;
+    }
+
+    try {
+      setErrorMessage("");
+      const response = await fetch(getApiUrl(`/api/moderador/usuarios/${userId}`), {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify(body),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.message || "Nao foi possivel atualizar o usuario.");
+      }
+
+      await loadUsuarios();
+    } catch (error: any) {
+      setErrorMessage(error?.message || "Erro ao executar acao de usuario.");
+    }
+  };
+
   useEffect(() => {
     hydrateAuthSessionFromToken();
 
@@ -110,7 +171,7 @@ export function ModeradorPage() {
     const boot = async () => {
       try {
         setErrorMessage("");
-        await loadInstituicoes();
+        await Promise.all([loadInstituicoes(), loadUsuarios()]);
       } catch (error: any) {
         setErrorMessage(error?.message || "Erro ao carregar instituicoes.");
       } finally {
@@ -247,6 +308,30 @@ export function ModeradorPage() {
       </header>
 
       <div className="container mx-auto px-4 py-8">
+        <div className="mb-6 flex flex-wrap gap-3">
+          <Button
+            variant={activeSection === "menu" ? "default" : "outline"}
+            className={activeSection === "menu" ? "bg-teal-700 hover:bg-teal-800 text-white" : "border-teal-300 text-teal-900 hover:bg-teal-50"}
+            onClick={() => setActiveSection("menu")}
+          >
+            Menu Inicial
+          </Button>
+          <Button
+            variant={activeSection === "usuarios" ? "default" : "outline"}
+            className={activeSection === "usuarios" ? "bg-teal-700 hover:bg-teal-800 text-white" : "border-teal-300 text-teal-900 hover:bg-teal-50"}
+            onClick={() => setActiveSection("usuarios")}
+          >
+            Editar Usuários
+          </Button>
+          <Button
+            variant={activeSection === "instituicoes" ? "default" : "outline"}
+            className={activeSection === "instituicoes" ? "bg-teal-700 hover:bg-teal-800 text-white" : "border-teal-300 text-teal-900 hover:bg-teal-50"}
+            onClick={() => setActiveSection("instituicoes")}
+          >
+            Verificar Instituições
+          </Button>
+        </div>
+
         {isLoading && (
           <div className="flex items-center justify-center py-16">
             <div className="text-center">
@@ -266,6 +351,76 @@ export function ModeradorPage() {
 
         {!isLoading && (
           <>
+        {activeSection === "menu" && (
+          <div className="grid md:grid-cols-2 gap-6 mb-8">
+            <Card className="border-teal-200">
+              <CardHeader>
+                <CardTitle className="text-teal-900">Editar Usuários</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-teal-700 mb-4">Gerencie permissões, bloqueios e senha dos usuários.</p>
+                <Button className="bg-teal-700 hover:bg-teal-800 text-white" onClick={() => setActiveSection("usuarios")}>Abrir Usuários</Button>
+              </CardContent>
+            </Card>
+            <Card className="border-teal-200">
+              <CardHeader>
+                <CardTitle className="text-teal-900">Verificar Instituições</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-teal-700 mb-4">Aprove, recuse, desative ou reative instituições.</p>
+                <Button className="bg-teal-700 hover:bg-teal-800 text-white" onClick={() => setActiveSection("instituicoes")}>Abrir Instituições</Button>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {activeSection === "usuarios" && (
+          <Card className="border-teal-200 mb-8">
+            <CardHeader className="bg-gradient-to-r from-teal-50 to-rose-50">
+              <CardTitle className="text-2xl text-teal-900">Gestão de Usuários</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-teal-200">
+                      <th className="text-left py-3 px-2 text-teal-900">Usuário</th>
+                      <th className="text-left py-3 px-2 text-teal-900 hidden md:table-cell">Tipo</th>
+                      <th className="text-left py-3 px-2 text-teal-900 hidden lg:table-cell">Status</th>
+                      <th className="text-right py-3 px-2 text-teal-900">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {usuarios.map((usuario) => (
+                      <tr key={usuario.id} className="border-b border-teal-100 align-top">
+                        <td className="py-3 px-2">
+                          <p className="text-teal-900 font-medium">{usuario.nome_responsavel}</p>
+                          <p className="text-sm text-teal-700">{usuario.email}</p>
+                        </td>
+                        <td className="py-3 px-2 hidden md:table-cell text-teal-800">{usuario.tipo_usuario}</td>
+                        <td className="py-3 px-2 hidden lg:table-cell text-teal-800">
+                          {usuario.bloqueado ? "Bloqueado" : "Ativo"} • {usuario.precisa_trocar_senha ? "Troca senha" : "Senha ok"}
+                        </td>
+                        <td className="py-3 px-2 text-right">
+                          <div className="flex justify-end gap-2 flex-wrap">
+                            <Button size="sm" variant="outline" className="border-teal-300 text-teal-800" onClick={() => handleUserAction(usuario.id, "tornarModerador")}>Moderador</Button>
+                            <Button size="sm" variant="outline" className="border-teal-300 text-teal-800" onClick={() => handleUserAction(usuario.id, "tornarDonatario")}>Donatário</Button>
+                            <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-white" onClick={() => handleUserAction(usuario.id, usuario.bloqueado ? "desbloquear" : "bloquear")}>{usuario.bloqueado ? "Desbloquear" : "Bloquear"}</Button>
+                            <Button size="sm" variant="outline" className="border-teal-300 text-teal-800" onClick={() => handleUserAction(usuario.id, "forcarTrocaSenha")}>Forçar Senha</Button>
+                            <Button size="sm" className="bg-teal-700 hover:bg-teal-800 text-white" onClick={() => handleUserAction(usuario.id, "trocarSenha")}>Trocar Senha</Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {activeSection === "instituicoes" && (
+        <>
         {/* Instituições Pendentes */}
         <Card className="border-teal-200 mb-8">
           <CardHeader className="bg-gradient-to-r from-teal-50 to-rose-50">
@@ -438,6 +593,8 @@ export function ModeradorPage() {
             </div>
           </CardContent>
         </Card>
+        </>
+        )}
           </>
         )}
       </div>

@@ -7,10 +7,22 @@ import { Label } from "../components/ui/label";
 import { getApiUrl } from "../config/api";
 import { setAuthSession } from "../lib/auth";
 
+interface InstituicaoBusca {
+  id: number;
+  nome: string;
+  cnpj: string;
+  cidade: string;
+  estado: string;
+}
+
 export function RegisterPage() {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [jaCadastrada, setJaCadastrada] = useState(false);
+  const [buscaInstituicao, setBuscaInstituicao] = useState("");
+  const [resultadosBusca, setResultadosBusca] = useState<InstituicaoBusca[]>([]);
+  const [instituicaoSelecionada, setInstituicaoSelecionada] = useState<InstituicaoBusca | null>(null);
   const [formData, setFormData] = useState({
     nomeResponsavel: "",
     email: "",
@@ -38,6 +50,11 @@ export function RegisterPage() {
     setIsLoading(true);
 
     try {
+      if (jaCadastrada && !instituicaoSelecionada) {
+        setErrorMessage("Selecione uma instituição já cadastrada para solicitar vínculo.");
+        return;
+      }
+
       const response = await fetch(getApiUrl("/api/auth/register"), {
         method: "POST",
         headers: {
@@ -49,6 +66,7 @@ export function RegisterPage() {
           tipo: "donatario",
           nomeResponsavel: formData.nomeResponsavel,
           telefone: formData.telefone,
+          instituicaoIdExistente: jaCadastrada ? instituicaoSelecionada?.id : null,
         }),
       });
 
@@ -61,11 +79,28 @@ export function RegisterPage() {
 
       setAuthSession(data.token, data.user);
 
-      navigate("/cadastrar-instituicao");
+      navigate(jaCadastrada ? "/dashboard" : "/cadastrar-instituicao");
     } catch {
       setErrorMessage("Erro de conexao com o servidor.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleBuscarInstituicoes = async () => {
+    const query = buscaInstituicao.trim();
+
+    if (query.length < 2) {
+      setResultadosBusca([]);
+      return;
+    }
+
+    try {
+      const response = await fetch(getApiUrl(`/api/instituicoes/search?query=${encodeURIComponent(query)}`));
+      const payload = await response.json();
+      setResultadosBusca(payload.instituicoes || []);
+    } catch {
+      setResultadosBusca([]);
     }
   };
 
@@ -79,13 +114,85 @@ export function RegisterPage() {
           </Link>
           <h1 className="text-3xl text-teal-900">Cadastro de Donatário</h1>
           <p className="text-teal-700 mt-2">
-            Cadastre sua instituição para começar a receber doações
+            Cadastre sua instituição ou solicite vínculo com uma instituição já cadastrada
           </p>
         </div>
 
         {/* Form */}
         <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl p-8 border border-teal-100">
           <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="rounded-lg border border-teal-200 bg-teal-50 p-4">
+              <p className="text-teal-900 font-medium mb-3">Sua instituição já está cadastrada?</p>
+              <div className="flex flex-wrap gap-4">
+                <label className="flex items-center gap-2 text-teal-900">
+                  <input
+                    type="radio"
+                    name="jaCadastrada"
+                    checked={!jaCadastrada}
+                    onChange={() => {
+                      setJaCadastrada(false);
+                      setInstituicaoSelecionada(null);
+                    }}
+                  />
+                  Não, vou cadastrar agora
+                </label>
+                <label className="flex items-center gap-2 text-teal-900">
+                  <input
+                    type="radio"
+                    name="jaCadastrada"
+                    checked={jaCadastrada}
+                    onChange={() => setJaCadastrada(true)}
+                  />
+                  Sim, quero solicitar vínculo
+                </label>
+              </div>
+            </div>
+
+            {jaCadastrada && (
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="buscaInstituicao" className="text-teal-900">
+                    Buscar instituição por nome ou CNPJ
+                  </Label>
+                  <div className="mt-2 flex gap-2">
+                    <Input
+                      id="buscaInstituicao"
+                      type="text"
+                      value={buscaInstituicao}
+                      onChange={(e) => setBuscaInstituicao(e.target.value)}
+                      placeholder="Digite nome ou CNPJ"
+                      className="border-teal-200 focus:border-teal-500"
+                    />
+                    <Button type="button" onClick={handleBuscarInstituicoes} className="bg-teal-700 hover:bg-teal-800 text-white">
+                      Buscar
+                    </Button>
+                  </div>
+                </div>
+
+                {resultadosBusca.length > 0 && (
+                  <div className="rounded-lg border border-teal-200 divide-y divide-teal-100">
+                    {resultadosBusca.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setInstituicaoSelecionada(item)}
+                        className={`w-full text-left px-4 py-3 hover:bg-teal-50 ${instituicaoSelecionada?.id === item.id ? "bg-teal-100" : "bg-white"}`}
+                      >
+                        <p className="text-teal-900 font-medium">{item.nome}</p>
+                        <p className="text-sm text-teal-700">{item.cnpj} • {item.cidade}/{item.estado}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {instituicaoSelecionada && (
+                  <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-green-900">
+                    Instituição selecionada: {instituicaoSelecionada.nome}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div>
               <Label htmlFor="nomeResponsavel" className="text-teal-900">
                 Nome do Responsável
@@ -177,7 +284,7 @@ export function RegisterPage() {
               disabled={isLoading}
               className="w-full bg-[#F7C672] hover:bg-[#f5b85a] text-teal-900 py-6 text-lg"
             >
-              {isLoading ? "Cadastrando..." : "Proximo: Cadastrar Instituicao"}
+              {isLoading ? "Cadastrando..." : jaCadastrada ? "Finalizar e Solicitar Vinculo" : "Proximo: Cadastrar Instituicao"}
             </Button>
           </form>
 

@@ -19,6 +19,7 @@ interface Idoso {
 
 interface Instituicao {
   nomeInstituicao: string;
+  id?: number;
   cnpj: string;
   endereco: string;
   cidade: string;
@@ -30,15 +31,34 @@ interface Instituicao {
   status?: string;
 }
 
+interface VinculoInstituicao {
+  status: "pendente" | "aprovado" | "rejeitado";
+  motivo_rejeicao?: string | null;
+  instituicao?: {
+    id: number;
+    nome: string;
+    cnpj: string;
+  };
+}
+
+interface VinculoPendenteItem {
+  id: number;
+  usuario_id: number;
+  nome_responsavel: string;
+  email: string;
+}
+
 export function DashboardPage() {
   const navigate = useNavigate();
   const [idosos, setIdosos] = useState<Idoso[]>([]);
   const [user, setUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [instituicao, setInstituicao] = useState<Instituicao | null>(null);
+  const [vinculoInstituicao, setVinculoInstituicao] = useState<VinculoInstituicao | null>(null);
   const [isEditingInstituicao, setIsEditingInstituicao] = useState(false);
   const [editedInstituicao, setEditedInstituicao] = useState<Instituicao | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [vinculosPendentes, setVinculosPendentes] = useState<VinculoPendenteItem[]>([]);
 
   useEffect(() => {
     hydrateAuthSessionFromToken();
@@ -74,8 +94,11 @@ export function DashboardPage() {
         const instituicaoData = await instituicaoResponse.json();
         const idososData = await idososResponse.json();
 
+        setVinculoInstituicao(instituicaoData.vinculo || null);
+
         if (instituicaoData.instituicao) {
           const mappedInstituicao = {
+            id: instituicaoData.instituicao.id,
             nomeInstituicao: instituicaoData.instituicao.nome,
             cnpj: instituicaoData.instituicao.cnpj,
             endereco: instituicaoData.instituicao.endereco,
@@ -91,6 +114,20 @@ export function DashboardPage() {
           setInstituicao(mappedInstituicao);
           setEditedInstituicao(mappedInstituicao);
           localStorage.setItem("instituicao", JSON.stringify(mappedInstituicao));
+
+          const vinculosResponse = await fetch(
+            getApiUrl(`/api/instituicoes/${instituicaoData.instituicao.id}/vinculos-pendentes`),
+            {
+              headers: {
+                ...getAuthHeaders(),
+              },
+            }
+          );
+
+          if (vinculosResponse.ok) {
+            const vinculosData = await vinculosResponse.json();
+            setVinculosPendentes(vinculosData.vinculos || []);
+          }
         }
 
         const mappedIdosos = (idososData.idosos || []).map((item: any) => ({
@@ -169,9 +206,35 @@ export function DashboardPage() {
     setIsEditingInstituicao(false);
   };
 
+  const handleAprovarVinculo = async (vinculoId: number, action: "aprovar" | "recusar") => {
+    if (!instituicao?.id) return;
+
+    let motivoRejeicao: string | null = null;
+
+    if (action === "recusar") {
+      motivoRejeicao = window.prompt("Informe o motivo da rejeição:") || null;
+      if (!motivoRejeicao) return;
+    }
+
+    await fetch(getApiUrl(`/api/instituicoes/${instituicao.id}/vinculos/${vinculoId}`), {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...getAuthHeaders(),
+      },
+      body: JSON.stringify({ action, motivoRejeicao }),
+    });
+
+    setVinculosPendentes((prev) => prev.filter((v) => v.id !== vinculoId));
+  };
+
   const instituicaoStatus = String(instituicao?.status || "").toLowerCase();
   const isInstituicaoAprovada = ["aprovada", "ativa"].includes(instituicaoStatus);
-  const shouldBlockDashboard = Boolean(instituicao && !isInstituicaoAprovada);
+  const vinculoStatus = String(vinculoInstituicao?.status || "").toLowerCase();
+  const shouldBlockDashboard = Boolean(
+    (instituicao && !isInstituicaoAprovada) ||
+      (!instituicao && (vinculoStatus === "pendente" || vinculoStatus === "rejeitado"))
+  );
 
   const canCadastrarIdoso = instituicao ? isInstituicaoAprovada : false;
 
@@ -187,7 +250,7 @@ export function DashboardPage() {
   }
 
   if (shouldBlockDashboard) {
-    const isPendente = instituicaoStatus === "pendente";
+    const isPendente = instituicao ? instituicaoStatus === "pendente" : vinculoStatus === "pendente";
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-teal-50 flex flex-col">
@@ -224,13 +287,13 @@ export function DashboardPage() {
             <CardContent>
               <p className="text-yellow-900 mb-6">
                 {isPendente
-                  ? "Sua instituição ainda não foi aprovada pelo moderador. Assim que a análise for concluída, o dashboard será liberado."
-                  : "Sua instituição foi recusada ou desativada. Entre em contato com o moderador para regularizar o cadastro."}
+                  ? "Seu cadastro/vinculo de instituição ainda está em análise. Assim que for aprovado, o dashboard será liberado."
+                  : "Seu cadastro/vinculo de instituição foi recusado ou desativado. Entre em contato com o moderador para regularizar o acesso."}
               </p>
-              {!isPendente && instituicao?.motivoRecusa && (
+              {!isPendente && (instituicao?.motivoRecusa || vinculoInstituicao?.motivo_rejeicao) && (
                 <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4">
                   <p className="text-sm font-medium text-red-900 mb-1">Motivo informado pelo moderador</p>
-                  <p className="text-red-900 whitespace-pre-wrap">{instituicao.motivoRecusa}</p>
+                  <p className="text-red-900 whitespace-pre-wrap">{instituicao?.motivoRecusa || vinculoInstituicao?.motivo_rejeicao}</p>
                 </div>
               )}
               <div className="flex flex-wrap gap-3">
@@ -507,6 +570,28 @@ export function DashboardPage() {
                   </Button>
                 </div>
               )}
+            </CardContent>
+          </Card>
+        )}
+
+        {instituicao && vinculosPendentes.length > 0 && (
+          <Card className="border-teal-200 mb-8">
+            <CardHeader className="bg-gradient-to-r from-teal-50 to-rose-50">
+              <CardTitle className="text-2xl text-teal-900">Solicitações de vínculo pendentes</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-3">
+              {vinculosPendentes.map((vinculo) => (
+                <div key={vinculo.id} className="rounded-lg border border-teal-100 p-4 flex flex-wrap gap-3 justify-between items-center">
+                  <div>
+                    <p className="text-teal-900 font-medium">{vinculo.nome_responsavel}</p>
+                    <p className="text-sm text-teal-700">{vinculo.email}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={() => handleAprovarVinculo(vinculo.id, "aprovar")}>Aprovar</Button>
+                    <Button className="bg-[#E88080] hover:bg-red-600 text-white" onClick={() => handleAprovarVinculo(vinculo.id, "recusar")}>Recusar</Button>
+                  </div>
+                </div>
+              ))}
             </CardContent>
           </Card>
         )}

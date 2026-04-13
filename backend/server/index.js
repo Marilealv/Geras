@@ -190,6 +190,50 @@ function mapModeradorActionToDbStatus(actionStatus) {
   return null;
 }
 
+async function getApprovedMembership(userId, instituicaoId = null) {
+  const params = [userId];
+  let whereClause = "iu.usuario_id = $1";
+
+  if (instituicaoId) {
+    params.push(instituicaoId);
+    whereClause += " AND iu.instituicao_id = $2";
+  }
+
+  const result = await pool.query(
+    `SELECT iu.id, iu.instituicao_id, iu.usuario_id, iu.perfil, iu.status,
+            inst.nome AS instituicao_nome, inst.status AS instituicao_status
+     FROM instituicao_usuarios iu
+     INNER JOIN instituicoes inst ON inst.id = iu.instituicao_id
+     WHERE ${whereClause} AND iu.status = 'aprovado'
+     ORDER BY CASE iu.perfil WHEN 'proprietario' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, iu.id ASC
+     LIMIT 1`,
+    params
+  );
+
+  return result.rows[0] ?? null;
+}
+
+async function createPendingMembership(instituicaoId, usuarioId) {
+  const result = await pool.query(
+    `INSERT INTO instituicao_usuarios
+      (instituicao_id, usuario_id, perfil, status, solicitado_em, atualizado_em)
+     VALUES ($1, $2, 'membro', 'pendente', NOW(), NOW())
+     ON CONFLICT (instituicao_id, usuario_id)
+     DO UPDATE SET
+       status = CASE
+         WHEN instituicao_usuarios.status = 'aprovado' THEN instituicao_usuarios.status
+         ELSE 'pendente'
+       END,
+       motivo_rejeicao = NULL,
+       solicitado_em = NOW(),
+       atualizado_em = NOW()
+     RETURNING id, status`,
+    [instituicaoId, usuarioId]
+  );
+
+  return result.rows[0];
+}
+
 /**
  * Faz upload de arquivo para Cloudinary em pasta específica
  * @param {Buffer} fileBuffer - Buffer do arquivo
@@ -247,7 +291,7 @@ app.get("/api/health", async (_, res) => {
 // ============================================================================
 
 app.post("/api/auth/register", async (req, res) => {
-  const { email, senha, tipo, nomeResponsavel, telefone } = req.body ?? {};
+  const { email, senha, tipo, nomeResponsavel, telefone, instituicaoIdExistente } = req.body ?? {};
 
   if (!email || !senha || !tipo || !nomeResponsavel || !telefone) {
     return res
@@ -280,10 +324,28 @@ app.post("/api/auth/register", async (req, res) => {
     );
 
     const createdUser = insertResult.rows[0];
+
+    let vinculoPendente = false;
+
+    if (tipo === "donatario" && instituicaoIdExistente) {
+      const instituicaoResult = await pool.query(
+        "SELECT id FROM instituicoes WHERE id = $1 LIMIT 1",
+        [instituicaoIdExistente]
+      );
+
+      if (!instituicaoResult.rowCount) {
+        return res.status(400).json({ message: "Instituicao selecionada nao encontrada." });
+      }
+
+      const membership = await createPendingMembership(instituicaoIdExistente, createdUser.id);
+      vinculoPendente = membership.status !== "aprovado";
+    }
+
     const token = createToken(createdUser);
 
     return res.status(201).json({
       token,
+      vinculoPendente,
       user: {
         id: createdUser.id,
         email: createdUser.email,
@@ -317,7 +379,8 @@ app.post("/api/auth/login", async (req, res) => {
     }
 
     const result = await pool.query(
-      "SELECT id, email, senha, tipo_usuario, nome_responsavel, telefone FROM usuarios WHERE email = $1 LIMIT 1",
+      `SELECT id, email, senha, tipo_usuario, nome_responsavel, telefone, bloqueado, precisa_trocar_senha
+       FROM usuarios WHERE email = $1 LIMIT 1`,
       [normalizedEmail]
     );
 
@@ -334,6 +397,10 @@ app.post("/api/auth/login", async (req, res) => {
       }
 
       return res.status(401).json({ message: "Email ou senha invalidos." });
+    }
+
+    if (user.bloqueado) {
+      return res.status(403).json({ message: "Usuario bloqueado. Contate um moderador." });
     }
 
     const isValidPassword = await bcrypt.compare(senha, user.senha);
@@ -363,6 +430,7 @@ app.post("/api/auth/login", async (req, res) => {
         tipo: user.tipo_usuario,
         nome: user.nome_responsavel,
         telefone: user.telefone,
+        precisaTrocarSenha: Boolean(user.precisa_trocar_senha),
       },
     });
   } catch (error) {
@@ -516,7 +584,10 @@ app.post("/api/instituicoes", authMiddleware, async (req, res) => {
 
   try {
     const existingByUser = await pool.query(
-      "SELECT id FROM instituicoes WHERE usuario_id = $1 LIMIT 1",
+      `SELECT iu.id
+       FROM instituicao_usuarios iu
+       WHERE iu.usuario_id = $1 AND iu.status = 'aprovado'
+       LIMIT 1`,
       [req.user.id]
     );
 
@@ -528,7 +599,7 @@ app.post("/api/instituicoes", authMiddleware, async (req, res) => {
       `INSERT INTO instituicoes
        (usuario_id, nome, cnpj, endereco, cidade, estado, cep, telefone, descricao, imagem_id, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pendente')
-       RETURNING id, nome, cnpj, endereco, cidade, estado, cep, telefone, descricao, imagem_id, status`,
+       RETURNING id, usuario_id, nome, cnpj, endereco, cidade, estado, cep, telefone, descricao, imagem_id, status`,
       [
         req.user.id,
         nomeInstituicao,
@@ -544,6 +615,15 @@ app.post("/api/instituicoes", authMiddleware, async (req, res) => {
     );
 
     const instituicao = result.rows[0];
+
+    await pool.query(
+      `INSERT INTO instituicao_usuarios
+        (instituicao_id, usuario_id, perfil, status, solicitado_em, aprovado_em, aprovado_por_usuario_id, atualizado_em)
+       VALUES ($1, $2, 'proprietario', 'aprovado', NOW(), NOW(), $2, NOW())
+       ON CONFLICT (instituicao_id, usuario_id)
+       DO UPDATE SET perfil = 'proprietario', status = 'aprovado', atualizado_em = NOW()`,
+      [instituicao.id, req.user.id]
+    );
 
     return res.status(201).json({
       instituicao: {
@@ -565,21 +645,100 @@ app.get("/api/instituicoes/me", authMiddleware, async (req, res) => {
    * Response: { instituicao: {..., imagem_url: "cloudinary_url" | null} | null }
    */
   try {
+    const approvedMembership = await getApprovedMembership(req.user.id);
+
+    if (!approvedMembership) {
+      const pendingResult = await pool.query(
+        `SELECT iu.id, iu.status, iu.solicitado_em, iu.motivo_rejeicao,
+                inst.id AS instituicao_id, inst.nome AS instituicao_nome, inst.cnpj AS instituicao_cnpj
+         FROM instituicao_usuarios iu
+         INNER JOIN instituicoes inst ON inst.id = iu.instituicao_id
+         WHERE iu.usuario_id = $1 AND iu.status IN ('pendente', 'rejeitado')
+         ORDER BY iu.solicitado_em DESC
+         LIMIT 1`,
+        [req.user.id]
+      );
+
+      return res.json({
+        instituicao: null,
+        vinculo: pendingResult.rows[0]
+          ? {
+              id: pendingResult.rows[0].id,
+              status: pendingResult.rows[0].status,
+              solicitado_em: pendingResult.rows[0].solicitado_em,
+              motivo_rejeicao: pendingResult.rows[0].motivo_rejeicao,
+              instituicao: {
+                id: pendingResult.rows[0].instituicao_id,
+                nome: pendingResult.rows[0].instituicao_nome,
+                cnpj: pendingResult.rows[0].instituicao_cnpj,
+              },
+            }
+          : null,
+      });
+    }
+
     const result = await pool.query(
       `SELECT inst.id, inst.nome, inst.cnpj, inst.endereco, inst.cidade, inst.estado, inst.cep,
               inst.telefone, inst.descricao, inst.imagem_id, img.cloudinary_url AS imagem_url,
               inst.status, inst.motivo_recusa
        FROM instituicoes inst
        LEFT JOIN imagens img ON img.id = inst.imagem_id
-       WHERE inst.usuario_id = $1
+       WHERE inst.id = $1
        LIMIT 1`,
-      [req.user.id]
+      [approvedMembership.instituicao_id]
     );
 
-    return res.json({ instituicao: result.rows[0] ?? null });
+    return res.json({ instituicao: result.rows[0] ?? null, vinculo: null });
   } catch (error) {
     console.error("Erro ao buscar instituicao:", error);
     return res.status(500).json({ message: "Erro interno ao buscar instituicao." });
+  }
+});
+
+app.get("/api/instituicoes/search", async (req, res) => {
+  const query = String(req.query.query || "").trim();
+
+  if (query.length < 2) {
+    return res.json({ instituicoes: [] });
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT id, nome, cnpj, cidade, estado, status
+       FROM instituicoes
+       WHERE nome ILIKE $1 OR cnpj ILIKE $1
+       ORDER BY nome ASC
+       LIMIT 20`,
+      [`%${query}%`]
+    );
+
+    return res.json({ instituicoes: result.rows });
+  } catch (error) {
+    console.error("Erro ao buscar instituicoes:", error);
+    return res.status(500).json({ message: "Erro interno ao buscar instituicoes." });
+  }
+});
+
+app.post("/api/instituicoes/:id/solicitar-vinculo", authMiddleware, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const instituicaoResult = await pool.query("SELECT id FROM instituicoes WHERE id = $1 LIMIT 1", [id]);
+
+    if (!instituicaoResult.rowCount) {
+      return res.status(404).json({ message: "Instituicao nao encontrada." });
+    }
+
+    const membership = await createPendingMembership(id, req.user.id);
+
+    if (membership.status === "aprovado") {
+      return res.status(200).json({ message: "Usuario ja vinculado e aprovado nessa instituicao." });
+    }
+
+    return res.status(202).json({ message: "Solicitacao de vinculo enviada para aprovacao." });
+  } catch (error) {
+    console.error("Erro ao solicitar vinculo:", error);
+    return res.status(500).json({ message: "Erro interno ao solicitar vinculo." });
   }
 });
 
@@ -653,6 +812,12 @@ app.put("/api/instituicoes/me", authMiddleware, async (req, res) => {
   const { nome, cnpj, endereco, cidade, estado, cep, telefone, descricao, imagemId, status } = req.body ?? {};
 
   try {
+    const membership = await getApprovedMembership(req.user.id);
+
+    if (!membership) {
+      return res.status(404).json({ message: "Instituicao nao encontrada para este usuario." });
+    }
+
     const result = await pool.query(
       `UPDATE instituicoes
        SET nome = COALESCE($2, nome),
@@ -666,9 +831,9 @@ app.put("/api/instituicoes/me", authMiddleware, async (req, res) => {
            imagem_id = COALESCE($10, imagem_id),
            status = COALESCE($11, status),
            atualizado_em = NOW()
-       WHERE usuario_id = $1
+       WHERE id = $1
        RETURNING id, nome, cnpj, endereco, cidade, estado, cep, telefone, descricao, imagem_id, status`,
-      [req.user.id, nome, cnpj, endereco, cidade, estado, cep, telefone, descricao, imagemId, status]
+      [membership.instituicao_id, nome, cnpj, endereco, cidade, estado, cep, telefone, descricao, imagemId, status]
     );
 
     if (!result.rowCount) {
@@ -786,6 +951,148 @@ app.patch("/api/moderador/instituicoes/:id/status", authMiddleware, moderadorMid
   }
 });
 
+app.get("/api/instituicoes/:id/vinculos-pendentes", authMiddleware, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const isModerador = req.user?.tipo === "moderador";
+    const membership = isModerador ? null : await getApprovedMembership(req.user.id, id);
+
+    if (!isModerador && !membership) {
+      return res.status(403).json({ message: "Acesso negado aos vinculos desta instituicao." });
+    }
+
+    const result = await pool.query(
+      `SELECT iu.id, iu.usuario_id, iu.status, iu.solicitado_em, iu.motivo_rejeicao,
+              u.nome_responsavel, u.email, u.telefone
+       FROM instituicao_usuarios iu
+       INNER JOIN usuarios u ON u.id = iu.usuario_id
+       WHERE iu.instituicao_id = $1 AND iu.status = 'pendente'
+       ORDER BY iu.solicitado_em ASC`,
+      [id]
+    );
+
+    return res.json({ vinculos: result.rows });
+  } catch (error) {
+    console.error("Erro ao listar vinculos pendentes:", error);
+    return res.status(500).json({ message: "Erro interno ao listar vinculos pendentes." });
+  }
+});
+
+app.patch("/api/instituicoes/:instituicaoId/vinculos/:vinculoId", authMiddleware, async (req, res) => {
+  const { instituicaoId, vinculoId } = req.params;
+  const action = String(req.body?.action || "").trim().toLowerCase();
+  const motivoRejeicao = String(req.body?.motivoRejeicao || "").trim();
+
+  if (!["aprovar", "recusar"].includes(action)) {
+    return res.status(400).json({ message: "Acao invalida. Use aprovar ou recusar." });
+  }
+
+  if (action === "recusar" && !motivoRejeicao) {
+    return res.status(400).json({ message: "Motivo de rejeicao e obrigatorio." });
+  }
+
+  try {
+    const isModerador = req.user?.tipo === "moderador";
+    const membership = isModerador ? null : await getApprovedMembership(req.user.id, instituicaoId);
+
+    if (!isModerador && !membership) {
+      return res.status(403).json({ message: "Acesso negado para aprovar vinculos desta instituicao." });
+    }
+
+    const newStatus = action === "aprovar" ? "aprovado" : "rejeitado";
+    const result = await pool.query(
+      `UPDATE instituicao_usuarios
+       SET status = $3,
+           aprovado_em = CASE WHEN $3 = 'aprovado' THEN NOW() ELSE NULL END,
+           aprovado_por_usuario_id = $4,
+           motivo_rejeicao = CASE WHEN $3 = 'rejeitado' THEN $5 ELSE NULL END,
+           atualizado_em = NOW()
+       WHERE id = $1 AND instituicao_id = $2
+       RETURNING id, instituicao_id, usuario_id, status, solicitado_em, aprovado_em, motivo_rejeicao`,
+      [vinculoId, instituicaoId, newStatus, req.user.id, motivoRejeicao || null]
+    );
+
+    if (!result.rowCount) {
+      return res.status(404).json({ message: "Vinculo nao encontrado." });
+    }
+
+    return res.json({ vinculo: result.rows[0] });
+  } catch (error) {
+    console.error("Erro ao atualizar vinculo:", error);
+    return res.status(500).json({ message: "Erro interno ao atualizar vinculo." });
+  }
+});
+
+app.get("/api/moderador/usuarios", authMiddleware, moderadorMiddleware, async (_, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT u.id, u.nome_responsavel, u.email, u.telefone, u.tipo_usuario, u.bloqueado, u.precisa_trocar_senha,
+              COUNT(iu.id) FILTER (WHERE iu.status = 'aprovado') AS instituicoes_aprovadas,
+              COUNT(iu.id) FILTER (WHERE iu.status = 'pendente') AS vinculos_pendentes
+       FROM usuarios u
+       LEFT JOIN instituicao_usuarios iu ON iu.usuario_id = u.id
+       GROUP BY u.id
+       ORDER BY u.criado_em DESC`);
+
+    return res.json({ usuarios: result.rows });
+  } catch (error) {
+    console.error("Erro ao listar usuarios:", error);
+    return res.status(500).json({ message: "Erro interno ao listar usuarios." });
+  }
+});
+
+app.patch("/api/moderador/usuarios/:id", authMiddleware, moderadorMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const action = String(req.body?.action || "").trim();
+  const novaSenha = String(req.body?.novaSenha || "").trim();
+
+  try {
+    if (String(req.user.id) === String(id) && (action === "bloquear" || action === "tornarDonatario")) {
+      return res.status(400).json({ message: "Nao e permitido aplicar essa acao no proprio usuario." });
+    }
+
+    if (action === "tornarModerador" || action === "tornarDonatario") {
+      const tipo = action === "tornarModerador" ? "moderador" : "donatario";
+      await pool.query("UPDATE usuarios SET tipo_usuario = $2 WHERE id = $1", [id, tipo]);
+    } else if (action === "bloquear" || action === "desbloquear") {
+      await pool.query("UPDATE usuarios SET bloqueado = $2 WHERE id = $1", [id, action === "bloquear"]);
+    } else if (action === "forcarTrocaSenha" || action === "removerTrocaSenha") {
+      await pool.query("UPDATE usuarios SET precisa_trocar_senha = $2 WHERE id = $1", [
+        id,
+        action === "forcarTrocaSenha",
+      ]);
+    } else if (action === "trocarSenha") {
+      if (novaSenha.length < 6) {
+        return res.status(400).json({ message: "A nova senha deve ter ao menos 6 caracteres." });
+      }
+
+      const senhaHash = await bcrypt.hash(novaSenha, 12);
+      await pool.query(
+        "UPDATE usuarios SET senha = $2, precisa_trocar_senha = FALSE, bloqueado = FALSE WHERE id = $1",
+        [id, senhaHash]
+      );
+    } else {
+      return res.status(400).json({ message: "Acao de usuario invalida." });
+    }
+
+    const userResult = await pool.query(
+      `SELECT id, nome_responsavel, email, telefone, tipo_usuario, bloqueado, precisa_trocar_senha
+       FROM usuarios WHERE id = $1 LIMIT 1`,
+      [id]
+    );
+
+    if (!userResult.rowCount) {
+      return res.status(404).json({ message: "Usuario nao encontrado." });
+    }
+
+    return res.json({ usuario: userResult.rows[0] });
+  } catch (error) {
+    console.error("Erro ao atualizar usuario:", error);
+    return res.status(500).json({ message: "Erro interno ao atualizar usuario." });
+  }
+});
+
 app.delete("/api/moderador/instituicoes/:id", authMiddleware, moderadorMiddleware, async (req, res) => {
   const { id } = req.params;
 
@@ -835,9 +1142,15 @@ app.post("/api/idosos", authMiddleware, async (req, res) => {
   }
 
   try {
+    const membership = await getApprovedMembership(req.user.id);
+
+    if (!membership) {
+      return res.status(400).json({ message: "Cadastre ou vincule-se a uma instituicao antes de cadastrar idosos." });
+    }
+
     const instituicaoResult = await pool.query(
-      "SELECT id, status FROM instituicoes WHERE usuario_id = $1 LIMIT 1",
-      [req.user.id]
+      "SELECT id, status FROM instituicoes WHERE id = $1 LIMIT 1",
+      [membership.instituicao_id]
     );
 
     const instituicao = instituicaoResult.rows[0];
@@ -913,8 +1226,9 @@ app.get("/api/idosos", authMiddleware, async (req, res) => {
               i.historia, i.hobbies, i.musica_favorita, i.comida_favorita
        FROM idosos i
        INNER JOIN instituicoes inst ON inst.id = i.instituicao_id
+       INNER JOIN instituicao_usuarios iu ON iu.instituicao_id = inst.id
        LEFT JOIN imagens img ON img.id = i.imagem_id
-       WHERE inst.usuario_id = $1
+       WHERE iu.usuario_id = $1 AND iu.status = 'aprovado'
        ORDER BY i.criado_em DESC`,
       [req.user.id]
     );
@@ -938,7 +1252,13 @@ app.get("/api/idosos/:id", async (req, res) => {
       `SELECT i.id, i.nome, i.idade, i.data_aniversario, i.imagem_id, img.cloudinary_url AS foto_url,
               i.historia, i.hobbies, i.musica_favorita, i.comida_favorita,
               inst.id AS instituicao_id,
-              inst.usuario_id AS instituicao_usuario_id,
+              (
+                SELECT iu.usuario_id
+                FROM instituicao_usuarios iu
+                WHERE iu.instituicao_id = inst.id AND iu.status = 'aprovado'
+                ORDER BY CASE iu.perfil WHEN 'proprietario' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, iu.id ASC
+                LIMIT 1
+              ) AS instituicao_usuario_id,
               inst.nome AS instituicao_nome,
               inst.endereco AS instituicao_endereco,
               inst.cidade AS instituicao_cidade,
@@ -1053,7 +1373,11 @@ app.put("/api/idosos/:id", authMiddleware, async (req, res) => {
                comida_favorita = COALESCE($10, i.comida_favorita),
                atualizado_em = NOW()
            FROM instituicoes inst
-           WHERE i.id = $1 AND i.instituicao_id = inst.id AND inst.usuario_id = $2
+           INNER JOIN instituicao_usuarios iu ON iu.instituicao_id = inst.id
+           WHERE i.id = $1
+             AND i.instituicao_id = inst.id
+             AND iu.usuario_id = $2
+             AND iu.status = 'aprovado'
            RETURNING i.id, i.nome, i.idade, i.data_aniversario, i.imagem_id, i.historia, i.hobbies, i.musica_favorita, i.comida_favorita`,
           [
             id,
@@ -1128,8 +1452,12 @@ app.delete("/api/idosos/:id", authMiddleware, async (req, res) => {
         )
       : await pool.query(
           `DELETE FROM idosos i
-           USING instituicoes inst
-           WHERE i.id = $1 AND i.instituicao_id = inst.id AND inst.usuario_id = $2
+           USING instituicoes inst, instituicao_usuarios iu
+           WHERE i.id = $1
+             AND i.instituicao_id = inst.id
+             AND iu.instituicao_id = inst.id
+             AND iu.usuario_id = $2
+             AND iu.status = 'aprovado'
            RETURNING i.id`,
           [id, req.user.id]
         );
