@@ -20,14 +20,6 @@ import logoGeras from "../../imports/geras.png";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "../components/ui/dropdown-menu";
 import { getApiUrl } from "../config/api";
 import { clearAuthSession, getAuthHeaders, hydrateAuthSessionFromToken, logoutFromServer } from "../lib/auth";
 import {
@@ -95,6 +87,7 @@ export function ModeradorPage() {
   const [updatingUserId, setUpdatingUserId] = useState<number | null>(null);
   const [userActionFeedback, setUserActionFeedback] = useState("");
   const [showUserVinculosModal, setShowUserVinculosModal] = useState(false);
+  const [showUserActionsModal, setShowUserActionsModal] = useState(false);
   const [selectedUsuario, setSelectedUsuario] = useState<ModeradorUsuario | null>(null);
   const [userVinculos, setUserVinculos] = useState<ModeradorVinculoUsuario[]>([]);
   const [isLoadingVinculos, setIsLoadingVinculos] = useState(false);
@@ -232,6 +225,11 @@ export function ModeradorPage() {
     setSelectedUsuario(usuario);
     setShowUserVinculosModal(true);
     await loadUserVinculos(usuario.id);
+  };
+
+  const handleOpenUserActions = (usuario: ModeradorUsuario) => {
+    setSelectedUsuario(usuario);
+    setShowUserActionsModal(true);
   };
 
   const handleUserVinculoAction = async (
@@ -572,52 +570,15 @@ export function ModeradorPage() {
                           </div>
                         </td>
                         <td className="py-3 px-2 text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger
-                              className="inline-flex h-8 items-center justify-center rounded-md border border-teal-300 bg-white px-2.5 text-teal-800 transition-colors hover:bg-teal-50 disabled:pointer-events-none disabled:opacity-50"
-                              disabled={isUpdatingUser}
-                            >
-                              <Eye className="w-4 h-4" />
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-64">
-                              <DropdownMenuLabel>Ações do usuário</DropdownMenuLabel>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={() => handleOpenUserVinculos(usuario)}>
-                                <Link2 className="w-4 h-4" />
-                                Ver/Trocar instituições
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={() => handleUserAction(usuario.id, "tornarModerador")}>
-                                <Shield className="w-4 h-4" />
-                                Tornar moderador
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleUserAction(usuario.id, "tornarDonatario")}>
-                                <User className="w-4 h-4" />
-                                Tornar donatario
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleUserAction(usuario.id, usuario.bloqueado ? "desbloquear" : "bloquear")}
-                              >
-                                <Ban className="w-4 h-4" />
-                                {usuario.bloqueado ? "Desbloquear usuário" : "Bloquear usuário"}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  handleUserAction(
-                                    usuario.id,
-                                    usuario.precisa_trocar_senha ? "removerTrocaSenha" : "forcarTrocaSenha"
-                                  )
-                                }
-                              >
-                                <RefreshCw className="w-4 h-4" />
-                                {usuario.precisa_trocar_senha ? "Remover troca de senha" : "Forçar troca de senha"}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleUserAction(usuario.id, "trocarSenha")}>
-                                <RefreshCw className="w-4 h-4" />
-                                Definir nova senha
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-teal-300 text-teal-800 hover:bg-teal-50"
+                            disabled={isUpdatingUser}
+                            onClick={() => handleOpenUserActions(usuario)}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
                         </td>
                       </tr>
                     ))}
@@ -1029,6 +990,97 @@ export function ModeradorPage() {
               }
             >
               {isSubmittingAction ? "Processando..." : "Confirmar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={showUserActionsModal}
+        onOpenChange={(open) => {
+          setShowUserActionsModal(open);
+          if (!open) {
+            setSelectedUsuario(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-teal-900">Ações do usuário</DialogTitle>
+            <DialogDescription>
+              {selectedUsuario
+                ? `${selectedUsuario.nome_responsavel} (${selectedUsuario.email})`
+                : "Gerencie permissões e acessos do usuário."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedUsuario && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 py-2">
+              <Button
+                variant="outline"
+                className="justify-start border-teal-300 text-teal-800 hover:bg-teal-50"
+                onClick={() => {
+                  setShowUserActionsModal(false);
+                  handleOpenUserVinculos(selectedUsuario);
+                }}
+              >
+                <Link2 className="w-4 h-4 mr-2" />
+                Ver/Trocar instituições
+              </Button>
+              <Button
+                variant="outline"
+                className="justify-start border-teal-300 text-teal-800 hover:bg-teal-50"
+                onClick={() => handleUserAction(selectedUsuario.id, "tornarModerador")}
+              >
+                <Shield className="w-4 h-4 mr-2" />
+                Tornar moderador
+              </Button>
+              <Button
+                variant="outline"
+                className="justify-start border-teal-300 text-teal-800 hover:bg-teal-50"
+                onClick={() => handleUserAction(selectedUsuario.id, "tornarDonatario")}
+              >
+                <User className="w-4 h-4 mr-2" />
+                Tornar donatario
+              </Button>
+              <Button
+                variant="outline"
+                className="justify-start border-teal-300 text-teal-800 hover:bg-teal-50"
+                onClick={() => handleUserAction(selectedUsuario.id, selectedUsuario.bloqueado ? "desbloquear" : "bloquear")}
+              >
+                <Ban className="w-4 h-4 mr-2" />
+                {selectedUsuario.bloqueado ? "Desbloquear usuário" : "Bloquear usuário"}
+              </Button>
+              <Button
+                variant="outline"
+                className="justify-start border-teal-300 text-teal-800 hover:bg-teal-50"
+                onClick={() =>
+                  handleUserAction(
+                    selectedUsuario.id,
+                    selectedUsuario.precisa_trocar_senha ? "removerTrocaSenha" : "forcarTrocaSenha"
+                  )
+                }
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                {selectedUsuario.precisa_trocar_senha ? "Remover troca de senha" : "Forçar troca de senha"}
+              </Button>
+              <Button
+                className="justify-start bg-teal-700 hover:bg-teal-800 text-white"
+                onClick={() => handleUserAction(selectedUsuario.id, "trocarSenha")}
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Definir nova senha
+              </Button>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              className="border-teal-300 text-teal-900 hover:bg-teal-50"
+              onClick={() => setShowUserActionsModal(false)}
+            >
+              Fechar
             </Button>
           </DialogFooter>
         </DialogContent>
