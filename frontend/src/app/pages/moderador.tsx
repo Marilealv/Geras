@@ -573,15 +573,11 @@ export function ModeradorPage() {
                         </td>
                         <td className="py-3 px-2 text-right">
                           <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="border-teal-300 text-teal-800 hover:bg-teal-50"
-                                disabled={isUpdatingUser}
-                              >
-                                <Eye className="w-4 h-4" />
-                              </Button>
+                            <DropdownMenuTrigger
+                              className="inline-flex h-8 items-center justify-center rounded-md border border-teal-300 bg-white px-2.5 text-teal-800 transition-colors hover:bg-teal-50 disabled:pointer-events-none disabled:opacity-50"
+                              disabled={isUpdatingUser}
+                            >
+                              <Eye className="w-4 h-4" />
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-64">
                               <DropdownMenuLabel>Ações do usuário</DropdownMenuLabel>
