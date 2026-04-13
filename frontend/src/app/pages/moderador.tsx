@@ -1,9 +1,33 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router";
-import { LogOut, CheckCircle, XCircle, Eye, Trash2, Ban, Building2, RefreshCw, UserCog } from "lucide-react";
+import {
+  LogOut,
+  CheckCircle,
+  XCircle,
+  Eye,
+  Trash2,
+  Ban,
+  Building2,
+  RefreshCw,
+  UserCog,
+  ArrowLeft,
+  Loader2,
+  Shield,
+  User,
+  Link2,
+} from "lucide-react";
 import logoGeras from "../../imports/geras.png";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Badge } from "../components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../components/ui/dropdown-menu";
 import { getApiUrl } from "../config/api";
 import { clearAuthSession, getAuthHeaders, hydrateAuthSessionFromToken, logoutFromServer } from "../lib/auth";
 import {
@@ -42,6 +66,18 @@ interface ModeradorUsuario {
   vinculos_pendentes: string;
 }
 
+interface ModeradorVinculoUsuario {
+  id: number;
+  instituicao_id: number;
+  instituicao_nome: string;
+  instituicao_cnpj: string;
+  perfil: string;
+  status: "aprovado" | "pendente" | "rejeitado";
+  solicitado_em: string;
+  aprovado_em: string | null;
+  motivo_rejeicao: string | null;
+}
+
 export function ModeradorPage() {
   const navigate = useNavigate();
   const [instituicoes, setInstituicoes] = useState<Instituicao[]>([]);
@@ -55,6 +91,14 @@ export function ModeradorPage() {
   const [isSubmittingAction, setIsSubmittingAction] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [usuarios, setUsuarios] = useState<ModeradorUsuario[]>([]);
+  const [isUpdatingUser, setIsUpdatingUser] = useState(false);
+  const [updatingUserId, setUpdatingUserId] = useState<number | null>(null);
+  const [userActionFeedback, setUserActionFeedback] = useState("");
+  const [showUserVinculosModal, setShowUserVinculosModal] = useState(false);
+  const [selectedUsuario, setSelectedUsuario] = useState<ModeradorUsuario | null>(null);
+  const [userVinculos, setUserVinculos] = useState<ModeradorVinculoUsuario[]>([]);
+  const [isLoadingVinculos, setIsLoadingVinculos] = useState(false);
+  const [isUpdatingVinculo, setIsUpdatingVinculo] = useState(false);
 
   const loadInstituicoes = async () => {
     const response = await fetch(getApiUrl("/api/moderador/instituicoes"), {
@@ -125,6 +169,10 @@ export function ModeradorPage() {
 
     try {
       setErrorMessage("");
+      setIsUpdatingUser(true);
+      setUpdatingUserId(userId);
+      setUserActionFeedback("Atualizando...");
+
       const response = await fetch(getApiUrl(`/api/moderador/usuarios/${userId}`), {
         method: "PATCH",
         headers: {
@@ -140,8 +188,84 @@ export function ModeradorPage() {
       }
 
       await loadUsuarios();
+      setUserActionFeedback("Atualizado com sucesso.");
     } catch (error: any) {
+      setUserActionFeedback("");
       setErrorMessage(error?.message || "Erro ao executar acao de usuario.");
+    } finally {
+      setIsUpdatingUser(false);
+      setUpdatingUserId(null);
+
+      window.setTimeout(() => {
+        setUserActionFeedback("");
+      }, 1800);
+    }
+  };
+
+  const loadUserVinculos = async (userId: number) => {
+    setIsLoadingVinculos(true);
+    setErrorMessage("");
+
+    try {
+      const response = await fetch(getApiUrl(`/api/moderador/usuarios/${userId}/vinculos`), {
+        headers: {
+          ...getAuthHeaders(),
+        },
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload?.message || "Nao foi possivel carregar os vinculos do usuario.");
+      }
+
+      setUserVinculos(payload.vinculos || []);
+    } catch (error: any) {
+      setErrorMessage(error?.message || "Erro ao carregar vinculos do usuario.");
+      setUserVinculos([]);
+    } finally {
+      setIsLoadingVinculos(false);
+    }
+  };
+
+  const handleOpenUserVinculos = async (usuario: ModeradorUsuario) => {
+    setSelectedUsuario(usuario);
+    setShowUserVinculosModal(true);
+    await loadUserVinculos(usuario.id);
+  };
+
+  const handleUserVinculoAction = async (
+    vinculoId: number,
+    action: "aprovar" | "pendenciar" | "rejeitar" | "desvincular"
+  ) => {
+    if (!selectedUsuario) return;
+
+    try {
+      setIsUpdatingVinculo(true);
+      setErrorMessage("");
+
+      const response = await fetch(
+        getApiUrl(`/api/moderador/usuarios/${selectedUsuario.id}/vinculos/${vinculoId}`),
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            ...getAuthHeaders(),
+          },
+          body: JSON.stringify({ action }),
+        }
+      );
+
+      if (!response.ok && response.status !== 204) {
+        const payload = await response.json();
+        throw new Error(payload?.message || "Nao foi possivel atualizar o vinculo.");
+      }
+
+      await Promise.all([loadUserVinculos(selectedUsuario.id), loadUsuarios()]);
+    } catch (error: any) {
+      setErrorMessage(error?.message || "Erro ao atualizar vinculo do usuario.");
+    } finally {
+      setIsUpdatingVinculo(false);
     }
   };
 
@@ -208,6 +332,32 @@ export function ModeradorPage() {
     };
     return texts[status as keyof typeof texts] || "Pendente";
   };
+
+  const getUserRoleLabel = (tipo: ModeradorUsuario["tipo_usuario"]) => {
+    return tipo === "moderador" ? "Moderador" : "Donatario";
+  };
+
+  const getUserStatusBadge = (usuario: ModeradorUsuario) => {
+    if (usuario.bloqueado) {
+      return <Badge className="bg-red-100 text-red-700 border-red-200">Bloqueado</Badge>;
+    }
+
+    return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Ativo</Badge>;
+  };
+
+  const getPasswordBadge = (usuario: ModeradorUsuario) => {
+    if (usuario.precisa_trocar_senha) {
+      return <Badge className="bg-amber-100 text-amber-700 border-amber-200">Troca de senha pendente</Badge>;
+    }
+
+    return <Badge className="bg-sky-100 text-sky-700 border-sky-200">Senha definida</Badge>;
+  };
+
+  const sectionTitle = {
+    menu: "Painel do Moderador",
+    usuarios: "Editar Usuários",
+    instituicoes: "Verificar Instituições",
+  }[activeSection];
 
   const handleAction = (instituicao: Instituicao, action: typeof actionType) => {
     setSelectedInstituicao(instituicao);
@@ -308,28 +458,26 @@ export function ModeradorPage() {
       </header>
 
       <div className="container mx-auto px-4 py-8">
-        <div className="mb-6 flex flex-wrap gap-3">
-          <Button
-            variant={activeSection === "menu" ? "default" : "outline"}
-            className={activeSection === "menu" ? "bg-teal-700 hover:bg-teal-800 text-white" : "border-teal-300 text-teal-900 hover:bg-teal-50"}
-            onClick={() => setActiveSection("menu")}
-          >
-            Menu Inicial
-          </Button>
-          <Button
-            variant={activeSection === "usuarios" ? "default" : "outline"}
-            className={activeSection === "usuarios" ? "bg-teal-700 hover:bg-teal-800 text-white" : "border-teal-300 text-teal-900 hover:bg-teal-50"}
-            onClick={() => setActiveSection("usuarios")}
-          >
-            Editar Usuários
-          </Button>
-          <Button
-            variant={activeSection === "instituicoes" ? "default" : "outline"}
-            className={activeSection === "instituicoes" ? "bg-teal-700 hover:bg-teal-800 text-white" : "border-teal-300 text-teal-900 hover:bg-teal-50"}
-            onClick={() => setActiveSection("instituicoes")}
-          >
-            Verificar Instituições
-          </Button>
+        <div className="mb-6 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            {activeSection !== "menu" && (
+              <Button
+                variant="outline"
+                onClick={() => setActiveSection("menu")}
+                className="border-teal-300 text-teal-900 hover:bg-teal-50"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Voltar
+              </Button>
+            )}
+            <h1 className="text-2xl sm:text-3xl font-semibold text-teal-950">{sectionTitle}</h1>
+          </div>
+          {(isUpdatingUser || isSubmittingAction || isUpdatingVinculo) && (
+            <div className="flex items-center gap-2 text-sm text-teal-700">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Atualizando...
+            </div>
+          )}
         </div>
 
         {isLoading && (
@@ -380,13 +528,18 @@ export function ModeradorPage() {
               <CardTitle className="text-2xl text-teal-900">Gestão de Usuários</CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
+              {userActionFeedback && (
+                <div className="mb-4 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-sm text-teal-800">
+                  {userActionFeedback}
+                </div>
+              )}
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-teal-200">
                       <th className="text-left py-3 px-2 text-teal-900">Usuário</th>
                       <th className="text-left py-3 px-2 text-teal-900 hidden md:table-cell">Tipo</th>
-                      <th className="text-left py-3 px-2 text-teal-900 hidden lg:table-cell">Status</th>
+                      <th className="text-left py-3 px-2 text-teal-900 hidden lg:table-cell">Situação</th>
                       <th className="text-right py-3 px-2 text-teal-900">Ações</th>
                     </tr>
                   </thead>
@@ -396,19 +549,79 @@ export function ModeradorPage() {
                         <td className="py-3 px-2">
                           <p className="text-teal-900 font-medium">{usuario.nome_responsavel}</p>
                           <p className="text-sm text-teal-700">{usuario.email}</p>
+                          <div className="mt-2 flex flex-wrap gap-2 lg:hidden">
+                            {getUserStatusBadge(usuario)}
+                            {getPasswordBadge(usuario)}
+                          </div>
+                          {isUpdatingUser && updatingUserId === usuario.id && (
+                            <div className="mt-2 inline-flex items-center gap-2 text-xs text-teal-700">
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              Atualizando...
+                            </div>
+                          )}
                         </td>
-                        <td className="py-3 px-2 hidden md:table-cell text-teal-800">{usuario.tipo_usuario}</td>
+                        <td className="py-3 px-2 hidden md:table-cell text-teal-800">
+                          <Badge className="bg-teal-100 text-teal-800 border-teal-200">
+                            {getUserRoleLabel(usuario.tipo_usuario)}
+                          </Badge>
+                        </td>
                         <td className="py-3 px-2 hidden lg:table-cell text-teal-800">
-                          {usuario.bloqueado ? "Bloqueado" : "Ativo"} • {usuario.precisa_trocar_senha ? "Troca senha" : "Senha ok"}
+                          <div className="flex flex-wrap gap-2">
+                            {getUserStatusBadge(usuario)}
+                            {getPasswordBadge(usuario)}
+                          </div>
                         </td>
                         <td className="py-3 px-2 text-right">
-                          <div className="flex justify-end gap-2 flex-wrap">
-                            <Button size="sm" variant="outline" className="border-teal-300 text-teal-800" onClick={() => handleUserAction(usuario.id, "tornarModerador")}>Moderador</Button>
-                            <Button size="sm" variant="outline" className="border-teal-300 text-teal-800" onClick={() => handleUserAction(usuario.id, "tornarDonatario")}>Donatário</Button>
-                            <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-white" onClick={() => handleUserAction(usuario.id, usuario.bloqueado ? "desbloquear" : "bloquear")}>{usuario.bloqueado ? "Desbloquear" : "Bloquear"}</Button>
-                            <Button size="sm" variant="outline" className="border-teal-300 text-teal-800" onClick={() => handleUserAction(usuario.id, "forcarTrocaSenha")}>Forçar Senha</Button>
-                            <Button size="sm" className="bg-teal-700 hover:bg-teal-800 text-white" onClick={() => handleUserAction(usuario.id, "trocarSenha")}>Trocar Senha</Button>
-                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-teal-300 text-teal-800 hover:bg-teal-50"
+                                disabled={isUpdatingUser}
+                              >
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-64">
+                              <DropdownMenuLabel>Ações do usuário</DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => handleOpenUserVinculos(usuario)}>
+                                <Link2 className="w-4 h-4" />
+                                Ver/Trocar instituições
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => handleUserAction(usuario.id, "tornarModerador")}>
+                                <Shield className="w-4 h-4" />
+                                Tornar moderador
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleUserAction(usuario.id, "tornarDonatario")}>
+                                <User className="w-4 h-4" />
+                                Tornar donatario
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleUserAction(usuario.id, usuario.bloqueado ? "desbloquear" : "bloquear")}
+                              >
+                                <Ban className="w-4 h-4" />
+                                {usuario.bloqueado ? "Desbloquear usuário" : "Bloquear usuário"}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  handleUserAction(
+                                    usuario.id,
+                                    usuario.precisa_trocar_senha ? "removerTrocaSenha" : "forcarTrocaSenha"
+                                  )
+                                }
+                              >
+                                <RefreshCw className="w-4 h-4" />
+                                {usuario.precisa_trocar_senha ? "Remover troca de senha" : "Forçar troca de senha"}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleUserAction(usuario.id, "trocarSenha")}>
+                                <RefreshCw className="w-4 h-4" />
+                                Definir nova senha
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </td>
                       </tr>
                     ))}
@@ -820,6 +1033,107 @@ export function ModeradorPage() {
               }
             >
               {isSubmittingAction ? "Processando..." : "Confirmar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={showUserVinculosModal}
+        onOpenChange={(open) => {
+          setShowUserVinculosModal(open);
+          if (!open) {
+            setSelectedUsuario(null);
+            setUserVinculos([]);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="text-teal-900">Instituições vinculadas do usuário</DialogTitle>
+            <DialogDescription>
+              {selectedUsuario
+                ? `${selectedUsuario.nome_responsavel} (${selectedUsuario.email})`
+                : "Gerencie os vínculos de instituição deste usuário."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {isLoadingVinculos ? (
+            <div className="py-8 flex items-center justify-center gap-2 text-teal-700">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Carregando vínculos...
+            </div>
+          ) : userVinculos.length === 0 ? (
+            <div className="py-8 text-center text-teal-700">Nenhum vínculo encontrado para este usuário.</div>
+          ) : (
+            <div className="max-h-[55vh] overflow-y-auto space-y-3 pr-1">
+              {userVinculos.map((vinculo) => (
+                <div key={vinculo.id} className="rounded-lg border border-teal-200 p-4 bg-white">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <p className="font-medium text-teal-900">{vinculo.instituicao_nome}</p>
+                      <p className="text-sm text-teal-700">CNPJ: {vinculo.instituicao_cnpj}</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Badge className="bg-teal-100 text-teal-800 border-teal-200">Perfil: {vinculo.perfil}</Badge>
+                        <Badge className={getStatusBadge(vinculo.status)}>{getStatusText(vinculo.status)}</Badge>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 md:justify-end">
+                      {vinculo.status !== "aprovado" && (
+                        <Button
+                          size="sm"
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                          disabled={isUpdatingVinculo}
+                          onClick={() => handleUserVinculoAction(vinculo.id, "aprovar")}
+                        >
+                          Aprovar
+                        </Button>
+                      )}
+                      {vinculo.status !== "pendente" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-amber-300 text-amber-700 hover:bg-amber-50"
+                          disabled={isUpdatingVinculo}
+                          onClick={() => handleUserVinculoAction(vinculo.id, "pendenciar")}
+                        >
+                          Pendenciar
+                        </Button>
+                      )}
+                      {vinculo.status !== "rejeitado" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-rose-300 text-rose-700 hover:bg-rose-50"
+                          disabled={isUpdatingVinculo}
+                          onClick={() => handleUserVinculoAction(vinculo.id, "rejeitar")}
+                        >
+                          Rejeitar
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        className="bg-slate-700 hover:bg-slate-800 text-white"
+                        disabled={isUpdatingVinculo}
+                        onClick={() => handleUserVinculoAction(vinculo.id, "desvincular")}
+                      >
+                        Desvincular
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              className="border-teal-300 text-teal-900 hover:bg-teal-50"
+              onClick={() => setShowUserVinculosModal(false)}
+            >
+              Fechar
             </Button>
           </DialogFooter>
         </DialogContent>

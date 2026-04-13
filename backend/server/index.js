@@ -1093,6 +1093,97 @@ app.patch("/api/moderador/usuarios/:id", authMiddleware, moderadorMiddleware, as
   }
 });
 
+app.get("/api/moderador/usuarios/:id/vinculos", authMiddleware, moderadorMiddleware, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const userResult = await pool.query(
+      "SELECT id FROM usuarios WHERE id = $1 LIMIT 1",
+      [id]
+    );
+
+    if (!userResult.rowCount) {
+      return res.status(404).json({ message: "Usuario nao encontrado." });
+    }
+
+    const result = await pool.query(
+      `SELECT iu.id, iu.instituicao_id, iu.perfil, iu.status, iu.solicitado_em, iu.aprovado_em, iu.motivo_rejeicao,
+              inst.nome AS instituicao_nome, inst.cnpj AS instituicao_cnpj
+       FROM instituicao_usuarios iu
+       INNER JOIN instituicoes inst ON inst.id = iu.instituicao_id
+       WHERE iu.usuario_id = $1
+       ORDER BY iu.atualizado_em DESC, iu.id DESC`,
+      [id]
+    );
+
+    return res.json({ vinculos: result.rows });
+  } catch (error) {
+    console.error("Erro ao listar vinculos do usuario:", error);
+    return res.status(500).json({ message: "Erro interno ao listar vinculos do usuario." });
+  }
+});
+
+app.patch("/api/moderador/usuarios/:id/vinculos/:vinculoId", authMiddleware, moderadorMiddleware, async (req, res) => {
+  const { id, vinculoId } = req.params;
+  const action = String(req.body?.action || "").trim().toLowerCase();
+
+  if (!["aprovar", "pendenciar", "rejeitar", "desvincular"].includes(action)) {
+    return res.status(400).json({ message: "Acao de vinculo invalida." });
+  }
+
+  try {
+    const userResult = await pool.query(
+      "SELECT id FROM usuarios WHERE id = $1 LIMIT 1",
+      [id]
+    );
+
+    if (!userResult.rowCount) {
+      return res.status(404).json({ message: "Usuario nao encontrado." });
+    }
+
+    const vinculoResult = await pool.query(
+      `SELECT id, usuario_id
+       FROM instituicao_usuarios
+       WHERE id = $1 AND usuario_id = $2
+       LIMIT 1`,
+      [vinculoId, id]
+    );
+
+    if (!vinculoResult.rowCount) {
+      return res.status(404).json({ message: "Vinculo nao encontrado para este usuario." });
+    }
+
+    if (action === "desvincular") {
+      await pool.query("DELETE FROM instituicao_usuarios WHERE id = $1", [vinculoId]);
+      return res.status(204).send();
+    }
+
+    const statusMap = {
+      aprovar: "aprovado",
+      pendenciar: "pendente",
+      rejeitar: "rejeitado",
+    };
+
+    const newStatus = statusMap[action];
+    const result = await pool.query(
+      `UPDATE instituicao_usuarios
+       SET status = $2,
+           aprovado_em = CASE WHEN $2 = 'aprovado' THEN NOW() ELSE NULL END,
+           aprovado_por_usuario_id = CASE WHEN $2 = 'aprovado' THEN $3 ELSE NULL END,
+           motivo_rejeicao = CASE WHEN $2 = 'rejeitado' THEN 'Rejeitado pelo moderador.' ELSE NULL END,
+           atualizado_em = NOW()
+       WHERE id = $1
+       RETURNING id, instituicao_id, usuario_id, perfil, status, solicitado_em, aprovado_em, motivo_rejeicao`,
+      [vinculoId, newStatus, req.user.id]
+    );
+
+    return res.json({ vinculo: result.rows[0] });
+  } catch (error) {
+    console.error("Erro ao atualizar vinculo do usuario:", error);
+    return res.status(500).json({ message: "Erro interno ao atualizar vinculo do usuario." });
+  }
+});
+
 app.delete("/api/moderador/instituicoes/:id", authMiddleware, moderadorMiddleware, async (req, res) => {
   const { id } = req.params;
 
