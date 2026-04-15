@@ -26,6 +26,7 @@ interface Instituicao {
   cep: string;
   telefone: string;
   descricao: string;
+  idosos: Idoso[];
 }
 
 interface HeaderUser {

@@ -542,11 +542,9 @@ export function ModeradorPage() {
     return matchesSearch && matchesStatus;
   });
 
-  const filteredInstituicoesPendentes = filteredInstituicoes.filter(
+  const instituicoesPendentes = instituicoes.filter(
     (instituicao: Instituicao) => instituicao.status === "pendente"
   );
-
-  const instituicoesPendentes = filteredInstituicoesPendentes;
 
   const sectionTitleMap: Record<"menu" | "usuarios" | "instituicoes", string> = {
     menu: "Painel do Moderador",
@@ -903,13 +901,9 @@ export function ModeradorPage() {
 
         {activeSection === "instituicoes" && (
         <>
-        {/* Instituições Pendentes */}
         <Card className="border-teal-200 mb-8">
           <CardHeader className="bg-gradient-to-r from-teal-50 to-rose-50">
-            <CardTitle className="text-2xl text-teal-900 flex items-center gap-2">
-              <Building2 className="w-6 h-6" />
-              Instituições Pendentes ({instituicoesPendentes.length})
-            </CardTitle>
+            <CardTitle className="text-2xl text-teal-900">Filtros de Instituições</CardTitle>
           </CardHeader>
           <CardContent className="pt-6">
             <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -931,7 +925,7 @@ export function ModeradorPage() {
             </div>
 
             {showInstitutionFilters && (
-              <div className="mb-4 rounded-xl border border-teal-100 bg-teal-50/70 p-4">
+              <div className="rounded-xl border border-teal-100 bg-teal-50/70 p-4">
                 <p className="mb-3 text-sm font-medium text-teal-900">Status</p>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <label className="flex items-center gap-3 text-sm text-teal-800">
@@ -1003,7 +997,18 @@ export function ModeradorPage() {
                 </div>
               </div>
             )}
+          </CardContent>
+        </Card>
 
+        {/* Instituições Pendentes */}
+        <Card className="border-teal-200 mb-8">
+          <CardHeader className="bg-gradient-to-r from-teal-50 to-rose-50">
+            <CardTitle className="text-2xl text-teal-900 flex items-center gap-2">
+              <Building2 className="w-6 h-6" />
+              Instituições Pendentes ({instituicoesPendentes.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-6">
             {instituicoesPendentes.length === 0 ? (
               <p className="text-center text-teal-700 py-8">
                 Nenhuma instituição pendente de aprovação

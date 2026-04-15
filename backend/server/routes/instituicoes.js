@@ -176,6 +176,31 @@ export function registerInstituicoesRoutes({
         return res.json({ instituicoes: [] });
       }
 
+      const instituicaoIds = instituicoes.map((instituicao) => instituicao.id);
+
+      const idososResult = await pool.query(
+        `SELECT i.id, i.instituicao_id, i.nome, i.idade, i.historia, img.cloudinary_url AS foto_url
+         FROM idosos i
+         LEFT JOIN imagens img ON img.id = i.imagem_id
+         WHERE i.instituicao_id = ANY($1::bigint[])
+         ORDER BY i.criado_em DESC`,
+        [instituicaoIds]
+      );
+
+      const idososByInstituicaoId = new Map();
+
+      idososResult.rows.forEach((idoso) => {
+        const current = idososByInstituicaoId.get(idoso.instituicao_id) || [];
+        current.push({
+          id: idoso.id,
+          nome: idoso.nome,
+          idade: idoso.idade,
+          historia: idoso.historia,
+          foto_url: idoso.foto_url,
+        });
+        idososByInstituicaoId.set(idoso.instituicao_id, current);
+      });
+
       return res.json({
         instituicoes: instituicoes.map((row) => ({
           id: row.id,
@@ -189,6 +214,7 @@ export function registerInstituicoesRoutes({
           descricao: row.descricao,
           status: row.status,
           status_ui: mapInstituicaoStatusToUi(row.status),
+          idosos: idososByInstituicaoId.get(row.id) || [],
         })),
       });
     } catch (error) {
