@@ -10,7 +10,6 @@ import { clearAuthSession, getAuthHeaders, hydrateAuthSessionFromToken } from ".
 
 export function TrocarSenhaPage() {
   const navigate = useNavigate();
-  const [currentPassword, setCurrentPassword] = useState("");
   const [novaSenha, setNovaSenha] = useState("");
   const [confirmarSenha, setConfirmarSenha] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -58,7 +57,6 @@ export function TrocarSenhaPage() {
           ...getAuthHeaders(),
         },
         body: JSON.stringify({
-          currentPassword,
           novaSenha,
         }),
       });
@@ -102,25 +100,11 @@ export function TrocarSenhaPage() {
           <CardHeader className="border-b border-teal-100 bg-gradient-to-r from-teal-50 to-rose-50">
             <CardTitle className="text-teal-900">Defina uma nova senha</CardTitle>
             <CardDescription className="text-teal-700">
-              Informe sua senha atual e escolha uma nova senha para liberar o acesso.
+              Escolha uma nova senha para liberar o acesso.
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-6">
             <form onSubmit={handleSubmit} className="space-y-5">
-              <div>
-                <Label htmlFor="senhaAtual" className="text-teal-900">
-                  Senha atual
-                </Label>
-                <Input
-                  id="senhaAtual"
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="mt-2 border-teal-200 focus:border-teal-500"
-                  required
-                />
-              </div>
-
               <div>
                 <Label htmlFor="novaSenha" className="text-teal-900">
                   Nova senha

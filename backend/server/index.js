@@ -501,11 +501,10 @@ app.post("/api/auth/logout", authMiddleware, async (req, res) => {
 });
 
 app.patch("/api/auth/me/password", authMiddleware, async (req, res) => {
-  const currentPassword = String(req.body?.currentPassword || "").trim();
   const novaSenha = String(req.body?.novaSenha || "").trim();
 
-  if (!currentPassword || !novaSenha) {
-    return res.status(400).json({ message: "Senha atual e nova senha sao obrigatorias." });
+  if (!novaSenha) {
+    return res.status(400).json({ message: "A nova senha e obrigatoria." });
   }
 
   if (novaSenha.length < 6) {
@@ -522,12 +521,6 @@ app.patch("/api/auth/me/password", authMiddleware, async (req, res) => {
 
     if (!user) {
       return res.status(404).json({ message: "Usuario nao encontrado." });
-    }
-
-    const isValidPassword = await bcrypt.compare(currentPassword, user.senha);
-
-    if (!isValidPassword) {
-      return res.status(401).json({ message: "Senha atual invalida." });
     }
 
     const senhaHash = await bcrypt.hash(novaSenha, 12);
