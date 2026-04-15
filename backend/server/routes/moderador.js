@@ -17,6 +17,22 @@ export function registerModeradorRoutes({
     return next();
   };
 
+  const toPositiveInt = (value) => {
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  };
+
+  const normalizeVinculoAction = (rawAction) => {
+    const action = String(rawAction || "").trim().toLowerCase();
+
+    if (action === "aprovar") return "aprovar";
+    if (action === "pendenciar" || action === "pendente") return "pendenciar";
+    if (action === "rejeitar" || action === "recusar") return "rejeitar";
+    if (action === "desvincular" || action === "remover" || action === "excluir") return "desvincular";
+
+    return null;
+  };
+
   app.get("/api/moderador/instituicoes", authMiddleware, moderadorMiddleware, async (_, res) => {
     try {
       const result = await pool.query(
@@ -254,15 +270,19 @@ export function registerModeradorRoutes({
   });
 
   app.post("/api/moderador/usuarios/:id/vinculos", authMiddleware, moderadorMiddleware, async (req, res) => {
-    const { id } = req.params;
-    const instituicaoId = Number(req.body?.instituicaoId);
+    const userId = toPositiveInt(req.params.id);
+    const instituicaoId = toPositiveInt(req.body?.instituicaoId ?? req.body?.instituicao_id);
 
-    if (!Number.isFinite(instituicaoId)) {
+    if (!userId) {
+      return res.status(400).json({ message: "Usuario invalido." });
+    }
+
+    if (!instituicaoId) {
       return res.status(400).json({ message: "Instituicao invalida." });
     }
 
     try {
-      const userResult = await pool.query("SELECT id FROM usuarios WHERE id = $1 LIMIT 1", [id]);
+      const userResult = await pool.query("SELECT id FROM usuarios WHERE id = $1 LIMIT 1", [userId]);
 
       if (!userResult.rowCount) {
         return res.status(404).json({ message: "Usuario nao encontrado." });
@@ -274,7 +294,7 @@ export function registerModeradorRoutes({
         return res.status(404).json({ message: "Instituicao nao encontrada." });
       }
 
-      const vinculo = await createApprovedMembership(instituicaoId, Number(id), req.user.id, "membro");
+      const vinculo = await createApprovedMembership(instituicaoId, userId, req.user.id, "membro");
 
       return res.status(201).json({ vinculo });
     } catch (error) {
@@ -284,10 +304,14 @@ export function registerModeradorRoutes({
   });
 
   app.get("/api/moderador/usuarios/:id/vinculos", authMiddleware, moderadorMiddleware, async (req, res) => {
-    const { id } = req.params;
+    const userId = toPositiveInt(req.params.id);
+
+    if (!userId) {
+      return res.status(400).json({ message: "Usuario invalido." });
+    }
 
     try {
-      const userResult = await pool.query("SELECT id FROM usuarios WHERE id = $1 LIMIT 1", [id]);
+      const userResult = await pool.query("SELECT id FROM usuarios WHERE id = $1 LIMIT 1", [userId]);
 
       if (!userResult.rowCount) {
         return res.status(404).json({ message: "Usuario nao encontrado." });
@@ -300,7 +324,7 @@ export function registerModeradorRoutes({
          INNER JOIN instituicoes inst ON inst.id = iu.instituicao_id
          WHERE iu.usuario_id = $1
          ORDER BY iu.atualizado_em DESC, iu.id DESC`,
-        [id]
+        [userId]
       );
 
       return res.json({ vinculos: result.rows });
@@ -311,15 +335,24 @@ export function registerModeradorRoutes({
   });
 
   app.patch("/api/moderador/usuarios/:id/vinculos/:vinculoId", authMiddleware, moderadorMiddleware, async (req, res) => {
-    const { id, vinculoId } = req.params;
-    const action = String(req.body?.action || "").trim().toLowerCase();
+    const userId = toPositiveInt(req.params.id);
+    const vinculoId = toPositiveInt(req.params.vinculoId);
+    const action = normalizeVinculoAction(req.body?.action);
 
-    if (!["aprovar", "pendenciar", "rejeitar", "desvincular"].includes(action)) {
+    if (!userId) {
+      return res.status(400).json({ message: "Usuario invalido." });
+    }
+
+    if (!vinculoId) {
+      return res.status(400).json({ message: "Vinculo invalido." });
+    }
+
+    if (!action) {
       return res.status(400).json({ message: "Acao de vinculo invalida." });
     }
 
     try {
-      const userResult = await pool.query("SELECT id FROM usuarios WHERE id = $1 LIMIT 1", [id]);
+      const userResult = await pool.query("SELECT id FROM usuarios WHERE id = $1 LIMIT 1", [userId]);
 
       if (!userResult.rowCount) {
         return res.status(404).json({ message: "Usuario nao encontrado." });
@@ -330,7 +363,7 @@ export function registerModeradorRoutes({
          FROM instituicao_usuarios
          WHERE id = $1 AND usuario_id = $2
          LIMIT 1`,
-        [vinculoId, id]
+        [vinculoId, userId]
       );
 
       if (!vinculoResult.rowCount) {

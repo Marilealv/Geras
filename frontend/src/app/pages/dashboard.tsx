@@ -13,6 +13,7 @@ interface Idoso {
   id: number;
   nome: string;
   idade: number;
+  dataAniversario?: string;
   foto?: string;
   historia?: string;
 }
@@ -59,6 +60,29 @@ export function DashboardPage() {
   const [editedInstituicao, setEditedInstituicao] = useState<Instituicao | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [vinculosPendentes, setVinculosPendentes] = useState<VinculoPendenteItem[]>([]);
+
+  const calculateAge = (birthDate: string): number => {
+    if (!birthDate) return 0;
+
+    const [year, month, day] = String(birthDate)
+      .split("T")[0]
+      .split("-")
+      .map((value) => Number(value));
+
+    if (!year || !month || !day) {
+      return 0;
+    }
+
+    const today = new Date();
+    let age = today.getFullYear() - year;
+    const monthDiff = today.getMonth() + 1 - month;
+
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < day)) {
+      age -= 1;
+    }
+
+    return age;
+  };
 
   useEffect(() => {
     hydrateAuthSessionFromToken();
@@ -140,7 +164,8 @@ export function DashboardPage() {
         const mappedIdosos = (idososData.idosos || []).map((item: any) => ({
           id: item.id,
           nome: item.nome,
-          idade: item.idade,
+          idade: item.data_aniversario ? calculateAge(item.data_aniversario) : item.idade,
+          dataAniversario: item.data_aniversario || undefined,
           foto: item.foto_url,
           historia: item.historia,
         }));
