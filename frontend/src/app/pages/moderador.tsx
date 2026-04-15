@@ -280,26 +280,51 @@ export function ModeradorPage() {
   ) => {
     if (!selectedUsuario) return;
 
+    const actionCandidates: Record<typeof action, string[]> = {
+      aprovar: ["aprovar"],
+      pendenciar: ["pendenciar", "pendente"],
+      rejeitar: ["rejeitar", "recusar"],
+      desvincular: ["desvincular", "remover", "excluir"],
+    };
+
     try {
       setIsUpdatingVinculo(true);
       setVinculoNoticeType("info");
       setVinculoNotice("Atualizando vínculo...");
 
-      const response = await fetch(
-        getApiUrl(`/api/moderador/usuarios/${selectedUsuario.id}/vinculos/${vinculoId}`),
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            ...getAuthHeaders(),
-          },
-          body: JSON.stringify({ action }),
-        }
-      );
+      let lastErrorMessage = "Nao foi possivel atualizar o vinculo.";
+      let requestSucceeded = false;
 
-      if (!response.ok && response.status !== 204) {
-        const payload = await response.json();
-        throw new Error(payload?.message || "Nao foi possivel atualizar o vinculo.");
+      for (const actionCandidate of actionCandidates[action]) {
+        const response = await fetch(
+          getApiUrl(`/api/moderador/usuarios/${selectedUsuario.id}/vinculos/${vinculoId}`),
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              ...getAuthHeaders(),
+            },
+            body: JSON.stringify({ action: actionCandidate }),
+          }
+        );
+
+        if (response.ok || response.status === 204) {
+          requestSucceeded = true;
+          break;
+        }
+
+        try {
+          const payload = await response.json();
+          if (payload?.message) {
+            lastErrorMessage = payload.message;
+          }
+        } catch {
+          // Sem payload JSON, mantem ultima mensagem conhecida
+        }
+      }
+
+      if (!requestSucceeded) {
+        throw new Error(lastErrorMessage);
       }
 
       const updatedUsuarios = await loadUsuarios();

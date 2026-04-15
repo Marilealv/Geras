@@ -62,6 +62,50 @@ export function InstituicoesPage() {
     return age;
   };
 
+  const enrichMissingBirthDates = async (items: Instituicao[]): Promise<Instituicao[]> => {
+    const missingBirthDateIds = items
+      .flatMap((inst) => inst.idosos)
+      .filter((idoso) => !idoso.dataAniversario)
+      .map((idoso) => idoso.id);
+
+    if (!missingBirthDateIds.length) {
+      return items;
+    }
+
+    const uniqueIds = Array.from(new Set(missingBirthDateIds));
+    const birthDatesById = new Map<string, string>();
+
+    await Promise.all(
+      uniqueIds.map(async (idosoId) => {
+        try {
+          const response = await fetch(getApiUrl(`/api/idosos/${idosoId}`));
+          if (!response.ok) return;
+
+          const payload = await response.json();
+          const dataAniversario = payload?.idoso?.data_aniversario;
+
+          if (dataAniversario) {
+            birthDatesById.set(String(idosoId), String(dataAniversario));
+          }
+        } catch {
+          // Mantem fallback para idade retornada na listagem publica
+        }
+      })
+    );
+
+    if (!birthDatesById.size) {
+      return items;
+    }
+
+    return items.map((inst) => ({
+      ...inst,
+      idosos: inst.idosos.map((idoso) => ({
+        ...idoso,
+        dataAniversario: idoso.dataAniversario || birthDatesById.get(idoso.id),
+      })),
+    }));
+  };
+
   useEffect(() => {
     hydrateAuthSessionFromToken();
 
@@ -109,7 +153,8 @@ export function InstituicoesPage() {
           })),
         }));
 
-        setInstituicoes(mappedInstituicoes);
+        const enrichedInstituicoes = await enrichMissingBirthDates(mappedInstituicoes);
+        setInstituicoes(enrichedInstituicoes);
       } catch {
         setInstituicoes([]);
       } finally {
