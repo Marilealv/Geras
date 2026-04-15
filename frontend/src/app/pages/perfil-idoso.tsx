@@ -1,10 +1,21 @@
 import { useState, useEffect } from "react";
 import { Link, useParams, useNavigate } from "react-router";
-import { Heart, MapPin, Calendar, Music, Utensils, Smile, Edit, ArrowLeft, Trash2, Save, Building2 } from "lucide-react";
+import {
+  Heart,
+  MapPin,
+  Calendar,
+  Music,
+  Utensils,
+  Smile,
+  Edit,
+  ArrowLeft,
+  Trash2,
+  Save,
+  Building2,
+} from "lucide-react";
 import logoGeras from "../../imports/geras.png";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
-import { Badge } from "../components/ui/badge";
 import { Input } from "../components/ui/input";
 import {
   Dialog,
@@ -17,11 +28,13 @@ import {
 import { Footer } from "../components/footer";
 import { getApiUrl } from "../config/api";
 import { clearAuthSession, getAuthHeaders, getAuthToken, hydrateAuthSessionFromToken } from "../lib/auth";
+import { NecessidadesPanel } from "./perfil-idoso/necessidades-panel";
 
 interface Necessidade {
   id: number;
   item: string;
   tipo: "urgente" | "desejado";
+  concluida_em?: string | null;
 }
 
 interface Idoso {
@@ -63,6 +76,11 @@ export function PerfilIdosoPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedIdoso, setEditedIdoso] = useState<Idoso | null>(null);
+  const [necessidadeItem, setNecessidadeItem] = useState("");
+  const [necessidadeTipo, setNecessidadeTipo] = useState<"urgente" | "desejado">("urgente");
+  const [editingNecessidadeId, setEditingNecessidadeId] = useState<number | null>(null);
+  const [isSavingNecessidade, setIsSavingNecessidade] = useState(false);
+  const [necessidadeFeedback, setNecessidadeFeedback] = useState("");
 
   useEffect(() => {
     hydrateAuthSessionFromToken();
@@ -98,90 +116,95 @@ export function PerfilIdosoPage() {
     return age;
   };
 
-  useEffect(() => {
+  const loadIdosoData = async () => {
     if (!idosoId || Number.isNaN(idosoId)) {
       setIsLoading(false);
       return;
     }
 
-    const loadData = async () => {
-      try {
-        const idosoResponse = await fetch(getApiUrl(`/api/idosos/${idosoId}`), {
-          headers: {
-            ...getAuthHeaders(),
-          },
-        });
+    try {
+      const idosoResponse = await fetch(getApiUrl(`/api/idosos/${idosoId}`), {
+        headers: {
+          ...getAuthHeaders(),
+        },
+      });
 
-        if (idosoResponse.ok) {
-          const idosoPayload = await idosoResponse.json();
-          const apiIdoso = idosoPayload.idoso;
-          const mappedIdoso: Idoso = {
-            id: apiIdoso.id,
-            nome: apiIdoso.nome,
-            idade: apiIdoso.idade,
-            dataAniversario: apiIdoso.data_aniversario,
-            foto: apiIdoso.foto_url,
-            historia: apiIdoso.historia,
-            hobbies: apiIdoso.hobbies,
-            musicaFavorita: apiIdoso.musica_favorita,
-            comidaFavorita: apiIdoso.comida_favorita,
-            necessidades: (apiIdoso.necessidades || []).map((item: any) => ({
-              id: item.id,
-              item: item.item,
-              tipo: item.tipo,
-            })),
-          };
+      if (idosoResponse.ok) {
+        const idosoPayload = await idosoResponse.json();
+        const apiIdoso = idosoPayload.idoso;
+        const mappedIdoso: Idoso = {
+          id: apiIdoso.id,
+          nome: apiIdoso.nome,
+          idade: apiIdoso.idade,
+          dataAniversario: apiIdoso.data_aniversario,
+          foto: apiIdoso.foto_url,
+          historia: apiIdoso.historia,
+          hobbies: apiIdoso.hobbies,
+          musicaFavorita: apiIdoso.musica_favorita,
+          comidaFavorita: apiIdoso.comida_favorita,
+          necessidades: (apiIdoso.necessidades || []).map((item: any) => ({
+            id: item.id,
+            item: item.item,
+            tipo: item.tipo,
+            concluida_em: item.concluida_em,
+          })),
+        };
 
-          if (mappedIdoso.dataAniversario) {
-            mappedIdoso.idade = calculateAge(mappedIdoso.dataAniversario);
-          }
-
-          setIdoso(mappedIdoso);
-          setEditedIdoso(mappedIdoso);
-
-          if (apiIdoso.instituicao) {
-            setInstituicao({
-              usuarioId: Number(apiIdoso.instituicao.usuario_id),
-              nomeInstituicao: apiIdoso.instituicao.nome,
-              endereco: apiIdoso.instituicao.endereco,
-              cidade: apiIdoso.instituicao.cidade,
-              estado: apiIdoso.instituicao.estado,
-              cep: apiIdoso.instituicao.cep,
-              telefone: apiIdoso.instituicao.telefone,
-            });
-          }
-        }
-      } catch {
-        const idososData = localStorage.getItem("idosos");
-        if (idososData) {
-          const idosos = JSON.parse(idososData);
-          const idosoEncontrado = idosos.find((i: Idoso) => i.id === idosoId);
-          if (idosoEncontrado && idosoEncontrado.dataAniversario) {
-            idosoEncontrado.idade = calculateAge(idosoEncontrado.dataAniversario);
-          }
-          setIdoso(idosoEncontrado);
-          setEditedIdoso(idosoEncontrado);
+        if (mappedIdoso.dataAniversario) {
+          mappedIdoso.idade = calculateAge(mappedIdoso.dataAniversario);
         }
 
-        const instituicaoData = localStorage.getItem("instituicao");
-        if (instituicaoData) {
-          const parsedInstituicao = JSON.parse(instituicaoData);
+        setIdoso(mappedIdoso);
+        setEditedIdoso(mappedIdoso);
+
+        if (apiIdoso.instituicao) {
           setInstituicao({
-            usuarioId: 0,
-            nomeInstituicao: parsedInstituicao.nomeInstituicao,
-            endereco: parsedInstituicao.endereco,
-            cidade: parsedInstituicao.cidade,
-            estado: parsedInstituicao.estado,
-            cep: parsedInstituicao.cep,
-            telefone: parsedInstituicao.telefone,
+            usuarioId: Number(apiIdoso.instituicao.usuario_id),
+            nomeInstituicao: apiIdoso.instituicao.nome,
+            endereco: apiIdoso.instituicao.endereco,
+            cidade: apiIdoso.instituicao.cidade,
+            estado: apiIdoso.instituicao.estado,
+            cep: apiIdoso.instituicao.cep,
+            telefone: apiIdoso.instituicao.telefone,
           });
         }
-      } finally {
-        setIsLoading(false);
       }
-    };
+    } catch {
+      const idososData = localStorage.getItem("idosos");
+      if (idososData) {
+        const idosos = JSON.parse(idososData);
+        const idosoEncontrado = idosos.find((i: Idoso) => i.id === idosoId);
+        if (idosoEncontrado && idosoEncontrado.dataAniversario) {
+          idosoEncontrado.idade = calculateAge(idosoEncontrado.dataAniversario);
+        }
+        setIdoso(idosoEncontrado);
+        setEditedIdoso(idosoEncontrado);
+      }
 
-    loadData();
+      const instituicaoData = localStorage.getItem("instituicao");
+      if (instituicaoData) {
+        const parsedInstituicao = JSON.parse(instituicaoData);
+        setInstituicao({
+          usuarioId: 0,
+          nomeInstituicao: parsedInstituicao.nomeInstituicao,
+          endereco: parsedInstituicao.endereco,
+          cidade: parsedInstituicao.cidade,
+          estado: parsedInstituicao.estado,
+          cep: parsedInstituicao.cep,
+          telefone: parsedInstituicao.telefone,
+        });
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!idosoId || Number.isNaN(idosoId)) {
+      setIsLoading(false);
+      return;
+    }
+    loadIdosoData();
   }, [idosoId]);
 
   const hasActiveSession = Boolean(authUser && getAuthToken());
@@ -198,6 +221,8 @@ export function PerfilIdosoPage() {
     if (!canManageProfile) {
       return;
     }
+    resetNecessidadeForm();
+    setNecessidadeFeedback("");
     setIsEditing(true);
   };
 
@@ -249,7 +274,112 @@ export function PerfilIdosoPage() {
 
   const handleCancelEditing = () => {
     setEditedIdoso(idoso);
+    resetNecessidadeForm();
+    setNecessidadeFeedback("");
     setIsEditing(false);
+  };
+
+  const resetNecessidadeForm = () => {
+    setNecessidadeItem("");
+    setNecessidadeTipo("urgente");
+    setEditingNecessidadeId(null);
+  };
+
+  const handleEditNecessidade = (necessidade: Necessidade) => {
+    setNecessidadeItem(necessidade.item);
+    setNecessidadeTipo(necessidade.tipo);
+    setEditingNecessidadeId(necessidade.id);
+    setNecessidadeFeedback("");
+  };
+
+  const handleSaveNecessidade = async () => {
+    if (!canManageProfile || !idosoId) return;
+
+    const item = necessidadeItem.trim();
+    if (!item) {
+      setNecessidadeFeedback("Informe o item da necessidade.");
+      return;
+    }
+
+    try {
+      setIsSavingNecessidade(true);
+      setNecessidadeFeedback("");
+
+      const isEditingNecessidade = editingNecessidadeId !== null;
+      const endpoint = isEditingNecessidade
+        ? getApiUrl(`/api/idosos/${idosoId}/necessidades/${editingNecessidadeId}`)
+        : getApiUrl(`/api/idosos/${idosoId}/necessidades`);
+
+      const response = await fetch(endpoint, {
+        method: isEditingNecessidade ? "PATCH" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({
+          item,
+          tipo: necessidadeTipo,
+        }),
+      });
+
+      const payload = await response.json();
+
+      if (response.status === 401) {
+        clearAuthSession();
+        navigate("/login");
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(payload?.message || "Nao foi possivel salvar a necessidade.");
+      }
+
+      await loadIdosoData();
+      resetNecessidadeForm();
+      setNecessidadeFeedback(isEditingNecessidade ? "Necessidade atualizada." : "Necessidade adicionada.");
+    } catch (error: any) {
+      setNecessidadeFeedback(error?.message || "Erro ao salvar necessidade.");
+    } finally {
+      setIsSavingNecessidade(false);
+    }
+  };
+
+  const handleConcluirNecessidade = async (necessidadeId: number) => {
+    if (!canManageProfile || !idosoId) return;
+
+    try {
+      setIsSavingNecessidade(true);
+      setNecessidadeFeedback("");
+
+      const response = await fetch(getApiUrl(`/api/idosos/${idosoId}/necessidades/${necessidadeId}/concluir`), {
+        method: "PATCH",
+        headers: {
+          ...getAuthHeaders(),
+        },
+      });
+
+      const payload = await response.json();
+
+      if (response.status === 401) {
+        clearAuthSession();
+        navigate("/login");
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(payload?.message || "Nao foi possivel concluir a necessidade.");
+      }
+
+      await loadIdosoData();
+      setNecessidadeFeedback("Necessidade concluída.");
+      if (editingNecessidadeId === necessidadeId) {
+        resetNecessidadeForm();
+      }
+    } catch (error: any) {
+      setNecessidadeFeedback(error?.message || "Erro ao concluir necessidade.");
+    } finally {
+      setIsSavingNecessidade(false);
+    }
   };
 
   if (isLoading) {
@@ -278,8 +408,9 @@ export function PerfilIdosoPage() {
     );
   }
 
-  const urgentes = (isEditMode ? editedIdoso?.necessidades : idoso.necessidades)?.filter((n) => n.tipo === "urgente") || [];
-  const desejados = (isEditMode ? editedIdoso?.necessidades : idoso.necessidades)?.filter((n) => n.tipo === "desejado") || [];
+  const necessidadesAtuais = isEditMode ? editedIdoso?.necessidades : idoso.necessidades;
+  const urgentes = necessidadesAtuais?.filter((necessidade: Necessidade) => necessidade.tipo === "urgente") || [];
+  const desejados = necessidadesAtuais?.filter((necessidade: Necessidade) => necessidade.tipo === "desejado") || [];
 
   const handleDeleteIdoso = () => {
     if (!canManageProfile || !idosoId) return;
@@ -526,63 +657,22 @@ export function PerfilIdosoPage() {
               )}
             </div>
 
-            {/* Necessidades e Desejos */}
-            <div className="grid md:grid-cols-2 gap-6">
-              {/* Urgentes */}
-              {urgentes.length > 0 && (
-                <Card className="border-[#E88080] bg-[#E88080]/5">
-                  <CardHeader>
-                    <CardTitle className="text-teal-900">
-                      Itens Urgentes
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-teal-700 mb-4">
-                      Produtos de beleza e cuidados pessoais fundamentais para o dia a
-                      dia
-                    </p>
-                    <div className="space-y-2">
-                      {urgentes.map((item) => (
-                        <Badge
-                          key={item.id}
-                          variant="outline"
-                          className="bg-[#E88080] text-white border-[#E88080] block w-full py-2 text-center"
-                        >
-                          {item.item}
-                        </Badge>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Desejados */}
-              {desejados.length > 0 && (
-                <Card className="border-teal-600 bg-teal-600/5">
-                  <CardHeader>
-                    <CardTitle className="text-teal-900">
-                      Itens Desejados
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-teal-700 mb-4">
-                      Presentes, visitas e gestos que trazem alegria
-                    </p>
-                    <div className="space-y-2">
-                      {desejados.map((item) => (
-                        <Badge
-                          key={item.id}
-                          variant="outline"
-                          className="bg-teal-600 text-white border-teal-600 block w-full py-2 text-center"
-                        >
-                          {item.item}
-                        </Badge>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
+            <NecessidadesPanel
+              isEditMode={isEditMode}
+              editingNecessidadeId={editingNecessidadeId}
+              necessidadeItem={necessidadeItem}
+              onNecessidadeItemChange={setNecessidadeItem}
+              necessidadeTipo={necessidadeTipo}
+              onNecessidadeTipoChange={setNecessidadeTipo}
+              isSavingNecessidade={isSavingNecessidade}
+              necessidadeFeedback={necessidadeFeedback}
+              urgentes={urgentes}
+              desejados={desejados}
+              onSaveNecessidade={handleSaveNecessidade}
+              onResetNecessidadeForm={resetNecessidadeForm}
+              onEditNecessidade={handleEditNecessidade}
+              onConcluirNecessidade={handleConcluirNecessidade}
+            />
           </div>
 
           {/* Sidebar */}

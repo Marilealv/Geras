@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router";
-import { Plus, LogOut, Users, Home as HomeIcon, Heart, Edit, Save } from "lucide-react";
+import { LogOut, Users, Home as HomeIcon } from "lucide-react";
 import logoGeras from "../../imports/geras.png";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
-import { Input } from "../components/ui/input";
 import { Footer } from "../components/footer";
 import { getApiUrl } from "../config/api";
 import { clearAuthSession, getAuthHeaders, hydrateAuthSessionFromToken, logoutFromServer } from "../lib/auth";
+import { DashboardContent } from "./dashboard/content";
 
 interface Idoso {
   id: number;
@@ -232,7 +232,9 @@ export function DashboardPage() {
       body: JSON.stringify({ action, motivoRejeicao }),
     });
 
-    setVinculosPendentes((prev) => prev.filter((v) => v.id !== vinculoId));
+    setVinculosPendentes((prev: VinculoPendenteItem[]) =>
+      prev.filter((v: VinculoPendenteItem) => v.id !== vinculoId)
+    );
   };
 
   const instituicaoStatus = String(instituicao?.status || "").toLowerCase();
@@ -383,326 +385,21 @@ export function DashboardPage() {
           </Card>
         </div>
 
-        {/* Dados da Instituição */}
-        {instituicao && (
-          <Card className="border-teal-200 mb-8">
-            <CardHeader className="bg-gradient-to-r from-teal-50 to-rose-50">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-2xl text-teal-900 flex items-center gap-2">
-                  <HomeIcon className="w-6 h-6" />
-                  Dados da Instituição
-                </CardTitle>
-                {!isEditingInstituicao && (
-                  <Button
-                    onClick={handleEditInstituicao}
-                    variant="outline"
-                    className="border-teal-700 text-teal-900 hover:bg-teal-50"
-                  >
-                    <Edit className="w-4 h-4 mr-2" />
-                    Editar
-                  </Button>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <div className="grid md:grid-cols-2 gap-6">
-                <div>
-                  <label className="text-sm text-teal-700 font-medium mb-1 block">
-                    Nome da Instituição
-                  </label>
-                  {isEditingInstituicao ? (
-                    <Input
-                      value={editedInstituicao?.nomeInstituicao || ""}
-                      onChange={(e) =>
-                        setEditedInstituicao((prev) =>
-                          prev ? { ...prev, nomeInstituicao: e.target.value } : null
-                        )
-                      }
-                      className="w-full"
-                    />
-                  ) : (
-                    <p className="text-teal-900">{instituicao.nomeInstituicao}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="text-sm text-teal-700 font-medium mb-1 block">
-                    CNPJ
-                  </label>
-                  {isEditingInstituicao ? (
-                    <Input
-                      value={editedInstituicao?.cnpj || ""}
-                      onChange={(e) =>
-                        setEditedInstituicao((prev) =>
-                          prev ? { ...prev, cnpj: e.target.value } : null
-                        )
-                      }
-                      className="w-full"
-                    />
-                  ) : (
-                    <p className="text-teal-900">{instituicao.cnpj}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="text-sm text-teal-700 font-medium mb-1 block">
-                    Endereço
-                  </label>
-                  {isEditingInstituicao ? (
-                    <Input
-                      value={editedInstituicao?.endereco || ""}
-                      onChange={(e) =>
-                        setEditedInstituicao((prev) =>
-                          prev ? { ...prev, endereco: e.target.value } : null
-                        )
-                      }
-                      className="w-full"
-                    />
-                  ) : (
-                    <p className="text-teal-900">{instituicao.endereco}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="text-sm text-teal-700 font-medium mb-1 block">
-                    Telefone
-                  </label>
-                  {isEditingInstituicao ? (
-                    <Input
-                      value={editedInstituicao?.telefone || ""}
-                      onChange={(e) =>
-                        setEditedInstituicao((prev) =>
-                          prev ? { ...prev, telefone: e.target.value } : null
-                        )
-                      }
-                      className="w-full"
-                    />
-                  ) : (
-                    <p className="text-teal-900">{instituicao.telefone}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="text-sm text-teal-700 font-medium mb-1 block">
-                    Cidade
-                  </label>
-                  {isEditingInstituicao ? (
-                    <Input
-                      value={editedInstituicao?.cidade || ""}
-                      onChange={(e) =>
-                        setEditedInstituicao((prev) =>
-                          prev ? { ...prev, cidade: e.target.value } : null
-                        )
-                      }
-                      className="w-full"
-                    />
-                  ) : (
-                    <p className="text-teal-900">{instituicao.cidade}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="text-sm text-teal-700 font-medium mb-1 block">
-                    Estado
-                  </label>
-                  {isEditingInstituicao ? (
-                    <Input
-                      value={editedInstituicao?.estado || ""}
-                      onChange={(e) =>
-                        setEditedInstituicao((prev) =>
-                          prev ? { ...prev, estado: e.target.value } : null
-                        )
-                      }
-                      className="w-full"
-                    />
-                  ) : (
-                    <p className="text-teal-900">{instituicao.estado}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="text-sm text-teal-700 font-medium mb-1 block">
-                    CEP
-                  </label>
-                  {isEditingInstituicao ? (
-                    <Input
-                      value={editedInstituicao?.cep || ""}
-                      onChange={(e) =>
-                        setEditedInstituicao((prev) =>
-                          prev ? { ...prev, cep: e.target.value } : null
-                        )
-                      }
-                      className="w-full"
-                    />
-                  ) : (
-                    <p className="text-teal-900">{instituicao.cep}</p>
-                  )}
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="text-sm text-teal-700 font-medium mb-1 block">
-                    Descrição
-                  </label>
-                  {isEditingInstituicao ? (
-                    <textarea
-                      value={editedInstituicao?.descricao || ""}
-                      onChange={(e) =>
-                        setEditedInstituicao((prev) =>
-                          prev ? { ...prev, descricao: e.target.value } : null
-                        )
-                      }
-                      className="w-full px-3 py-2 border border-teal-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 min-h-[80px]"
-                    />
-                  ) : (
-                    <p className="text-teal-900">{instituicao.descricao}</p>
-                  )}
-                </div>
-              </div>
-
-              {isEditingInstituicao && (
-                <div className="flex gap-4 mt-6">
-                  <Button
-                    onClick={handleSaveInstituicao}
-                    className="bg-green-600 hover:bg-green-700 text-white"
-                  >
-                    <Save className="w-4 h-4 mr-2" />
-                    Salvar Alterações
-                  </Button>
-                  <Button
-                    onClick={handleCancelEditInstituicao}
-                    variant="outline"
-                    className="border-teal-300 text-teal-900 hover:bg-teal-50"
-                  >
-                    Cancelar
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {instituicao && vinculosPendentes.length > 0 && (
-          <Card className="border-teal-200 mb-8">
-            <CardHeader className="bg-gradient-to-r from-teal-50 to-rose-50">
-              <CardTitle className="text-2xl text-teal-900">Solicitações de vínculo pendentes</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-6 space-y-3">
-              {vinculosPendentes.map((vinculo) => (
-                <div key={vinculo.id} className="rounded-lg border border-teal-100 p-4 flex flex-wrap gap-3 justify-between items-center">
-                  <div>
-                    <p className="text-teal-900 font-medium">{vinculo.nome_responsavel}</p>
-                    <p className="text-sm text-teal-700">{vinculo.email}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={() => handleAprovarVinculo(vinculo.id, "aprovar")}>Aprovar</Button>
-                    <Button className="bg-[#E88080] hover:bg-red-600 text-white" onClick={() => handleAprovarVinculo(vinculo.id, "recusar")}>Recusar</Button>
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
-
-        {!instituicao && (
-          <div className="mb-8">
-            <Card className="border-teal-200">
-              <CardContent className="py-12 text-center">
-                <HomeIcon className="w-16 h-16 mx-auto text-teal-300 mb-4" />
-                <h3 className="text-2xl text-teal-900 mb-4">
-                  Cadastre sua Instituição
-                </h3>
-                <p className="text-lg text-teal-700 mb-6">
-                  Antes de cadastrar idosos, é necessário cadastrar sua instituição.
-                </p>
-                <Link to="/cadastrar-instituicao">
-                  <Button className="bg-[#F7C672] hover:bg-[#f5b85a] text-teal-900 py-6 text-lg px-8">
-                    <HomeIcon className="w-5 h-5 mr-2" />
-                    Solicitar Cadastro de Instituição
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* Lista de Idosos */}
-        {instituicao && (
-          <div>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
-              <h2 className="text-2xl text-teal-900 mb-4 sm:mb-0">Idosos Cadastrados</h2>
-              {canCadastrarIdoso && (
-                <Link to="/cadastrar-idoso">
-                  <Button className="bg-[#F7C672] hover:bg-[#f5b85a] text-teal-900">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Cadastrar Novo Idoso
-                  </Button>
-                </Link>
-              )}
-            </div>
-
-            {!canCadastrarIdoso && (
-              <Card className="border-yellow-200 bg-yellow-50 mb-6">
-                <CardContent className="py-4">
-                  <p className="text-yellow-800">
-                    Sua instituição ainda não foi aprovada. O cadastro de idosos será liberado após aprovação do moderador.
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-
-            {idosos.length === 0 ? (
-              <Card className="border-teal-200">
-                <CardContent className="py-12 text-center">
-                  <Users className="w-16 h-16 mx-auto text-teal-300 mb-4" />
-                  <p className="text-lg text-teal-700 mb-4">
-                    Ainda não há idosos cadastrados
-                  </p>
-                  {canCadastrarIdoso && (
-                    <Link to="/cadastrar-idoso">
-                      <Button className="bg-[#F7C672] hover:bg-[#f5b85a] text-teal-900">
-                        <Plus className="w-4 h-4 mr-2" />
-                        Cadastrar Primeiro Idoso
-                      </Button>
-                    </Link>
-                  )}
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {idosos.map((idoso) => (
-                  <Link key={idoso.id} to={`/perfil-idoso/${idoso.id}`}>
-                    <Card className="border-teal-200 hover:shadow-lg transition-shadow cursor-pointer">
-                      <CardContent className="p-6">
-                        <div className="flex items-center gap-4 mb-4">
-                          {idoso.foto ? (
-                            <img
-                              src={idoso.foto}
-                              alt={idoso.nome}
-                              className="w-16 h-16 rounded-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-16 h-16 rounded-full bg-teal-100 flex items-center justify-center">
-                              <Users className="w-8 h-8 text-teal-600" />
-                            </div>
-                          )}
-                          <div>
-                            <h3 className="text-lg text-teal-900">{idoso.nome}</h3>
-                            <p className="text-teal-600">{idoso.idade} anos</p>
-                          </div>
-                        </div>
-                        {idoso.historia && (
-                          <p className="text-sm text-teal-700 line-clamp-3">
-                            {idoso.historia}
-                          </p>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+        <DashboardContent
+          instituicao={instituicao}
+          editedInstituicao={editedInstituicao}
+          setEditedInstituicao={setEditedInstituicao}
+          isEditingInstituicao={isEditingInstituicao}
+          onEditInstituicao={handleEditInstituicao}
+          onSaveInstituicao={handleSaveInstituicao}
+          onCancelEditInstituicao={handleCancelEditInstituicao}
+          vinculosPendentes={vinculosPendentes}
+          handleAprovarVinculo={handleAprovarVinculo}
+          canCadastrarIdoso={canCadastrarIdoso}
+          idosos={idosos}
+          showSuccessModal={showSuccessModal}
+          onCloseSuccessModal={() => setShowSuccessModal(false)}
+        />
       </div>
 
       {/* Footer */}
