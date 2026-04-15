@@ -338,6 +338,7 @@ export function registerModeradorRoutes({
     const userId = toPositiveInt(req.params.id);
     const vinculoId = toPositiveInt(req.params.vinculoId);
     const action = normalizeVinculoAction(req.body?.action);
+    const motivoRejeicao = String(req.body?.motivoRejeicao || "").trim();
 
     if (!userId) {
       return res.status(400).json({ message: "Usuario invalido." });
@@ -359,7 +360,7 @@ export function registerModeradorRoutes({
       }
 
       const vinculoResult = await pool.query(
-        `SELECT id, usuario_id
+        `SELECT id, usuario_id, perfil, status
          FROM instituicao_usuarios
          WHERE id = $1 AND usuario_id = $2
          LIMIT 1`,
@@ -370,33 +371,78 @@ export function registerModeradorRoutes({
         return res.status(404).json({ message: "Vinculo nao encontrado para este usuario." });
       }
 
+      const vinculo = vinculoResult.rows[0];
+
+      if (vinculo.perfil === "proprietario" && action !== "aprovar") {
+        return res.status(400).json({
+          message: "Nao e permitido alterar ou remover o vinculo de proprietario da instituicao.",
+        });
+      }
+
       if (action === "desvincular") {
         await pool.query("DELETE FROM instituicao_usuarios WHERE id = $1", [vinculoId]);
         return res.status(204).send();
       }
 
-      const statusMap = {
-        aprovar: "aprovado",
-        pendenciar: "pendente",
-        rejeitar: "rejeitado",
-      };
+      if (action === "aprovar") {
+        const result = await pool.query(
+          `UPDATE instituicao_usuarios
+           SET status = 'aprovado',
+               aprovado_em = NOW(),
+               aprovado_por_usuario_id = $2,
+               motivo_rejeicao = NULL,
+               atualizado_em = NOW()
+           WHERE id = $1
+           RETURNING id, instituicao_id, usuario_id, perfil, status, solicitado_em, aprovado_em, motivo_rejeicao`,
+          [vinculoId, req.user.id]
+        );
 
-      const newStatus = statusMap[action];
+        if (!result.rowCount) {
+          return res.status(404).json({ message: "Vinculo nao encontrado." });
+        }
+
+        return res.json({ vinculo: result.rows[0] });
+      }
+
+      if (action === "pendenciar") {
+        const result = await pool.query(
+          `UPDATE instituicao_usuarios
+           SET status = 'pendente',
+               atualizado_em = NOW()
+           WHERE id = $1
+           RETURNING id, instituicao_id, usuario_id, perfil, status, solicitado_em, aprovado_em, motivo_rejeicao`,
+          [vinculoId]
+        );
+
+        if (!result.rowCount) {
+          return res.status(404).json({ message: "Vinculo nao encontrado." });
+        }
+
+        return res.json({ vinculo: result.rows[0] });
+      }
+
       const result = await pool.query(
         `UPDATE instituicao_usuarios
-         SET status = $2,
-             aprovado_em = CASE WHEN $2 = 'aprovado' THEN NOW() ELSE NULL END,
-             aprovado_por_usuario_id = CASE WHEN $2 = 'aprovado' THEN $3 ELSE NULL END,
-             motivo_rejeicao = CASE WHEN $2 = 'rejeitado' THEN 'Rejeitado pelo moderador.' ELSE NULL END,
+         SET status = 'rejeitado',
+             motivo_rejeicao = $2,
              atualizado_em = NOW()
          WHERE id = $1
          RETURNING id, instituicao_id, usuario_id, perfil, status, solicitado_em, aprovado_em, motivo_rejeicao`,
-        [vinculoId, newStatus, req.user.id]
+        [vinculoId, motivoRejeicao || "Rejeitado pelo moderador."]
       );
+
+      if (!result.rowCount) {
+        return res.status(404).json({ message: "Vinculo nao encontrado." });
+      }
 
       return res.json({ vinculo: result.rows[0] });
     } catch (error) {
       console.error("Erro ao atualizar vinculo do usuario:", error);
+
+      if (error?.code === "23514" || error?.code === "23503" || error?.code === "23502") {
+        return res.status(400).json({ message: error?.detail || "Nao foi possivel atualizar este vinculo." });
+      }
+
       return res.status(500).json({ message: "Erro interno ao atualizar vinculo do usuario." });
     }
   });

@@ -139,6 +139,22 @@ export function ModeradorModals({
   userVinculos,
   handleUserVinculoAction,
 }: ModeradorModalsProps) {
+  const getVinculoStatusText = (status: string) => {
+    const normalizedStatus = String(status || "").toLowerCase();
+
+    if (normalizedStatus === "aprovado") return "Aprovado";
+    if (normalizedStatus === "rejeitado") return "Rejeitado";
+    return "Pendente";
+  };
+
+  const getVinculoStatusBadge = (status: string) => {
+    const normalizedStatus = String(status || "").toLowerCase();
+
+    if (normalizedStatus === "aprovado") return "bg-emerald-100 text-emerald-700 border-emerald-200";
+    if (normalizedStatus === "rejeitado") return "bg-rose-100 text-rose-700 border-rose-200";
+    return "bg-yellow-100 text-yellow-800 border-yellow-200";
+  };
+
   return (
     <>
       <Dialog open={showDetailsModal} onOpenChange={setShowDetailsModal}>
@@ -561,18 +577,22 @@ export function ModeradorModals({
             <div className="max-h-[55vh] overflow-y-auto space-y-3 pr-1">
               {userVinculos.map((vinculo) => (
                 <div key={vinculo.id} className="rounded-lg border border-teal-200 p-4 bg-white">
+                  {(() => {
+                    const vinculoStatus = String(vinculo.status || "").toLowerCase();
+
+                    return (
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div>
                       <p className="font-medium text-teal-900">{vinculo.instituicao_nome}</p>
                       <p className="text-sm text-teal-700">CNPJ: {vinculo.instituicao_cnpj}</p>
                       <div className="mt-2 flex flex-wrap gap-2">
                         <Badge className="bg-teal-100 text-teal-800 border-teal-200">Perfil: {vinculo.perfil}</Badge>
-                        <Badge className={getStatusBadge(vinculo.status)}>{getStatusText(vinculo.status)}</Badge>
+                        <Badge className={getVinculoStatusBadge(vinculoStatus)}>{getVinculoStatusText(vinculoStatus)}</Badge>
                       </div>
                     </div>
 
                     <div className="flex flex-wrap gap-2 md:justify-end">
-                      {vinculo.status !== "aprovado" && (
+                      {vinculoStatus !== "aprovado" && (
                         <Button
                           size="sm"
                           className="bg-green-600 hover:bg-green-700 text-white"
@@ -582,7 +602,7 @@ export function ModeradorModals({
                           Aprovar
                         </Button>
                       )}
-                      {vinculo.status !== "pendente" && (
+                      {vinculoStatus !== "pendente" && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -593,7 +613,7 @@ export function ModeradorModals({
                           Pendenciar
                         </Button>
                       )}
-                      {vinculo.status !== "rejeitado" && (
+                      {vinculoStatus !== "rejeitado" && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -614,6 +634,8 @@ export function ModeradorModals({
                       </Button>
                     </div>
                   </div>
+                    );
+                  })()}
                 </div>
               ))}
             </div>

@@ -12,6 +12,7 @@ interface Idoso {
   id: string;
   nome: string;
   idade: number;
+  dataAniversario?: string;
   foto?: string;
   historia?: string;
 }
@@ -37,6 +38,29 @@ export function InstituicoesPage() {
   const [instituicoes, setInstituicoes] = useState<Instituicao[]>([]);
   const [headerUser, setHeaderUser] = useState<HeaderUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const calculateAge = (birthDate?: string): number | null => {
+    if (!birthDate) return null;
+
+    const [year, month, day] = String(birthDate)
+      .split("T")[0]
+      .split("-")
+      .map((value) => Number(value));
+
+    if (!year || !month || !day) {
+      return null;
+    }
+
+    const today = new Date();
+    let age = today.getFullYear() - year;
+    const monthDiff = today.getMonth() + 1 - month;
+
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < day)) {
+      age -= 1;
+    }
+
+    return age;
+  };
 
   useEffect(() => {
     hydrateAuthSessionFromToken();
@@ -79,6 +103,7 @@ export function InstituicoesPage() {
             id: String(idoso.id),
             nome: idoso.nome,
             idade: idoso.idade,
+            dataAniversario: idoso.data_aniversario || undefined,
             foto: idoso.foto_url,
             historia: idoso.historia,
           })),
@@ -239,6 +264,11 @@ export function InstituicoesPage() {
                     ) : (
                       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {instituicao.idosos.map((idoso) => (
+                          (() => {
+                            const calculatedAge = calculateAge(idoso.dataAniversario);
+                            const displayedAge = calculatedAge ?? idoso.idade;
+
+                            return (
                           <Link key={idoso.id} to={`/perfil-idoso/${idoso.id}`}>
                             <Card className="border-teal-200 hover:shadow-xl transition-all cursor-pointer h-full">
                               <CardContent className="p-6">
@@ -255,7 +285,7 @@ export function InstituicoesPage() {
                                     </div>
                                   )}
                                   <h3 className="text-xl text-teal-900 mb-1">{idoso.nome}</h3>
-                                  <p className="text-teal-600 mb-3">{idoso.idade} anos</p>
+                                  <p className="text-teal-600 mb-3">{displayedAge} anos</p>
                                   {idoso.historia && (
                                     <p className="text-sm text-teal-700 line-clamp-3">
                                       {idoso.historia}
@@ -265,6 +295,8 @@ export function InstituicoesPage() {
                               </CardContent>
                             </Card>
                           </Link>
+                            );
+                          })()
                         ))}
                       </div>
                     )}

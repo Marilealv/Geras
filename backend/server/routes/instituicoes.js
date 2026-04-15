@@ -179,7 +179,7 @@ export function registerInstituicoesRoutes({
       const instituicaoIds = instituicoes.map((instituicao) => instituicao.id);
 
       const idososResult = await pool.query(
-        `SELECT i.id, i.instituicao_id, i.nome, i.idade, i.historia, img.cloudinary_url AS foto_url
+        `SELECT i.id, i.instituicao_id, i.nome, i.idade, i.data_aniversario, i.historia, img.cloudinary_url AS foto_url
          FROM idosos i
          LEFT JOIN imagens img ON img.id = i.imagem_id
          WHERE i.instituicao_id = ANY($1::bigint[])
@@ -195,6 +195,7 @@ export function registerInstituicoesRoutes({
           id: idoso.id,
           nome: idoso.nome,
           idade: idoso.idade,
+          data_aniversario: idoso.data_aniversario,
           historia: idoso.historia,
           foto_url: idoso.foto_url,
         });
