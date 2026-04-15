@@ -38,6 +38,11 @@ export function LoginPage() {
 
       setAuthSession(data.token, data.user);
 
+      if (data.user.precisaTrocarSenha) {
+        navigate("/trocar-senha", { replace: true });
+        return;
+      }
+
       if (data.user.tipo === "moderador") {
         navigate("/moderador");
         return;

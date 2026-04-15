@@ -68,7 +68,14 @@ export function DashboardPage() {
       navigate("/login");
       return;
     }
-    setUser(JSON.parse(userData));
+
+    const parsedUser = JSON.parse(userData);
+    if (parsedUser?.precisaTrocarSenha) {
+      navigate("/trocar-senha", { replace: true });
+      return;
+    }
+
+    setUser(parsedUser);
 
     const loadDashboardData = async () => {
       try {

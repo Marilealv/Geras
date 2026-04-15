@@ -8,6 +8,7 @@ import { CadastrarInstituicaoPage } from "./pages/cadastrar-instituicao";
 import { PerfilIdosoPage } from "./pages/perfil-idoso";
 import { InstituicoesPage } from "./pages/instituicoes";
 import { ModeradorPage } from "./pages/moderador";
+import { TrocarSenhaPage } from "./pages/trocar-senha";
 
 export const router = createBrowserRouter([
   {
@@ -45,5 +46,9 @@ export const router = createBrowserRouter([
   {
     path: "/moderador",
     Component: ModeradorPage,
+  },
+  {
+    path: "/trocar-senha",
+    Component: TrocarSenhaPage,
   },
 ]);

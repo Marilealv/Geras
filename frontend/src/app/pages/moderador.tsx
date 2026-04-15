@@ -15,11 +15,14 @@ import {
   Shield,
   User,
   Link2,
+  Search,
+  UserPlus,
 } from "lucide-react";
 import logoGeras from "../../imports/geras.png";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
+import { Input } from "../components/ui/input";
 import { getApiUrl } from "../config/api";
 import { clearAuthSession, getAuthHeaders, hydrateAuthSessionFromToken, logoutFromServer } from "../lib/auth";
 import {
@@ -54,8 +57,17 @@ interface ModeradorUsuario {
   tipo_usuario: "moderador" | "donatario";
   bloqueado: boolean;
   precisa_trocar_senha: boolean;
-  instituicoes_aprovadas: string;
-  vinculos_pendentes: string;
+  instituicoes_aprovadas: number;
+  vinculos_pendentes: number;
+}
+
+interface InstituicaoBusca {
+  id: number;
+  nome: string;
+  cnpj: string;
+  cidade: string;
+  estado: string;
+  status: string;
 }
 
 interface ModeradorVinculoUsuario {
@@ -86,12 +98,19 @@ export function ModeradorPage() {
   const [isUpdatingUser, setIsUpdatingUser] = useState(false);
   const [updatingUserId, setUpdatingUserId] = useState<number | null>(null);
   const [userActionFeedback, setUserActionFeedback] = useState("");
+  const [userActionFeedbackType, setUserActionFeedbackType] = useState<"info" | "success" | "error">("info");
   const [showUserVinculosModal, setShowUserVinculosModal] = useState(false);
   const [showUserActionsModal, setShowUserActionsModal] = useState(false);
   const [selectedUsuario, setSelectedUsuario] = useState<ModeradorUsuario | null>(null);
   const [userVinculos, setUserVinculos] = useState<ModeradorVinculoUsuario[]>([]);
   const [isLoadingVinculos, setIsLoadingVinculos] = useState(false);
   const [isUpdatingVinculo, setIsUpdatingVinculo] = useState(false);
+  const [vinculoNotice, setVinculoNotice] = useState("");
+  const [vinculoNoticeType, setVinculoNoticeType] = useState<"info" | "success" | "error">("info");
+  const [buscaInstituicao, setBuscaInstituicao] = useState("");
+  const [resultadosBuscaInstituicao, setResultadosBuscaInstituicao] = useState<InstituicaoBusca[]>([]);
+  const [isBuscandoInstituicoes, setIsBuscandoInstituicoes] = useState(false);
+  const [isVinculandoInstituicao, setIsVinculandoInstituicao] = useState(false);
 
   const loadInstituicoes = async () => {
     const response = await fetch(getApiUrl("/api/moderador/instituicoes"), {
@@ -148,7 +167,14 @@ export function ModeradorPage() {
     }
 
     const payload = await response.json();
-    setUsuarios(payload.usuarios || []);
+    const mappedUsuarios = (payload.usuarios || []).map((usuario: any) => ({
+      ...usuario,
+      instituicoes_aprovadas: Number(usuario.instituicoes_aprovadas || 0),
+      vinculos_pendentes: Number(usuario.vinculos_pendentes || 0),
+    }));
+
+    setUsuarios(mappedUsuarios);
+    return mappedUsuarios;
   };
 
   const handleUserAction = async (userId: number, action: string) => {
@@ -161,10 +187,10 @@ export function ModeradorPage() {
     }
 
     try {
-      setErrorMessage("");
       setIsUpdatingUser(true);
       setUpdatingUserId(userId);
-      setUserActionFeedback("Atualizando...");
+      setUserActionFeedbackType("info");
+      setUserActionFeedback("Atualizando usuário...");
 
       const response = await fetch(getApiUrl(`/api/moderador/usuarios/${userId}`), {
         method: "PATCH",
@@ -180,24 +206,32 @@ export function ModeradorPage() {
         throw new Error(payload?.message || "Nao foi possivel atualizar o usuario.");
       }
 
-      await loadUsuarios();
+      const updatedUsuarios = await loadUsuarios();
+      const updatedUsuario = updatedUsuarios.find((usuario) => usuario.id === userId) || payload.usuario;
+
+      if (updatedUsuario) {
+        setSelectedUsuario(updatedUsuario);
+      }
+
+      setUserActionFeedbackType("success");
       setUserActionFeedback("Atualizado com sucesso.");
     } catch (error: any) {
-      setUserActionFeedback("");
-      setErrorMessage(error?.message || "Erro ao executar acao de usuario.");
+      setUserActionFeedbackType("error");
+      setUserActionFeedback(error?.message || "Erro ao executar acao de usuario.");
     } finally {
       setIsUpdatingUser(false);
       setUpdatingUserId(null);
 
       window.setTimeout(() => {
         setUserActionFeedback("");
+        setUserActionFeedbackType("info");
       }, 1800);
     }
   };
 
   const loadUserVinculos = async (userId: number) => {
     setIsLoadingVinculos(true);
-    setErrorMessage("");
+    setVinculoNotice("");
 
     try {
       const response = await fetch(getApiUrl(`/api/moderador/usuarios/${userId}/vinculos`), {
@@ -214,7 +248,8 @@ export function ModeradorPage() {
 
       setUserVinculos(payload.vinculos || []);
     } catch (error: any) {
-      setErrorMessage(error?.message || "Erro ao carregar vinculos do usuario.");
+      setVinculoNoticeType("error");
+      setVinculoNotice(error?.message || "Erro ao carregar vinculos do usuario.");
       setUserVinculos([]);
     } finally {
       setIsLoadingVinculos(false);
@@ -224,11 +259,16 @@ export function ModeradorPage() {
   const handleOpenUserVinculos = async (usuario: ModeradorUsuario) => {
     setSelectedUsuario(usuario);
     setShowUserVinculosModal(true);
+    setBuscaInstituicao("");
+    setResultadosBuscaInstituicao([]);
+    setVinculoNotice("");
     await loadUserVinculos(usuario.id);
   };
 
   const handleOpenUserActions = (usuario: ModeradorUsuario) => {
     setSelectedUsuario(usuario);
+    setUserActionFeedback("");
+    setUserActionFeedbackType("info");
     setShowUserActionsModal(true);
   };
 
@@ -240,7 +280,8 @@ export function ModeradorPage() {
 
     try {
       setIsUpdatingVinculo(true);
-      setErrorMessage("");
+      setVinculoNoticeType("info");
+      setVinculoNotice("Atualizando vínculo...");
 
       const response = await fetch(
         getApiUrl(`/api/moderador/usuarios/${selectedUsuario.id}/vinculos/${vinculoId}`),
@@ -259,11 +300,103 @@ export function ModeradorPage() {
         throw new Error(payload?.message || "Nao foi possivel atualizar o vinculo.");
       }
 
-      await Promise.all([loadUserVinculos(selectedUsuario.id), loadUsuarios()]);
+      const updatedUsuarios = await loadUsuarios();
+      const updatedUsuario = updatedUsuarios.find((usuario) => usuario.id === selectedUsuario.id);
+
+      if (updatedUsuario) {
+        setSelectedUsuario(updatedUsuario);
+      }
+
+      await loadUserVinculos(selectedUsuario.id);
+      setVinculoNoticeType("success");
+      setVinculoNotice("Vínculo atualizado com sucesso.");
     } catch (error: any) {
-      setErrorMessage(error?.message || "Erro ao atualizar vinculo do usuario.");
+      setVinculoNoticeType("error");
+      setVinculoNotice(error?.message || "Erro ao atualizar vinculo do usuario.");
     } finally {
       setIsUpdatingVinculo(false);
+    }
+  };
+
+  const handleBuscarInstituicoesUsuario = async () => {
+    const query = buscaInstituicao.trim();
+
+    if (query.length < 2) {
+      setVinculoNoticeType("info");
+      setVinculoNotice("Digite ao menos 2 caracteres para buscar.");
+      setResultadosBuscaInstituicao([]);
+      return;
+    }
+
+    try {
+      setIsBuscandoInstituicoes(true);
+      setVinculoNoticeType("info");
+      setVinculoNotice("Buscando instituições...");
+
+      const response = await fetch(getApiUrl(`/api/instituicoes/search?query=${encodeURIComponent(query)}`), {
+        headers: {
+          ...getAuthHeaders(),
+        },
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload?.message || "Nao foi possivel buscar instituicoes.");
+      }
+
+      setResultadosBuscaInstituicao(payload.instituicoes || []);
+      setVinculoNoticeType("success");
+      setVinculoNotice(
+        payload.instituicoes?.length ? "Selecione uma instituição para tornar o usuário membro." : "Nenhuma instituição encontrada."
+      );
+    } catch (error: any) {
+      setResultadosBuscaInstituicao([]);
+      setVinculoNoticeType("error");
+      setVinculoNotice(error?.message || "Erro ao buscar instituicoes.");
+    } finally {
+      setIsBuscandoInstituicoes(false);
+    }
+  };
+
+  const handleVincularInstituicao = async (instituicaoId: number) => {
+    if (!selectedUsuario) return;
+
+    try {
+      setIsVinculandoInstituicao(true);
+      setVinculoNoticeType("info");
+      setVinculoNotice("Atualizando vínculo do usuário...");
+
+      const response = await fetch(getApiUrl(`/api/moderador/usuarios/${selectedUsuario.id}/vinculos`), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({ instituicaoId }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload?.message || "Nao foi possivel vincular o usuario.");
+      }
+
+      const updatedUsuarios = await loadUsuarios();
+      const updatedUsuario = updatedUsuarios.find((usuario) => usuario.id === selectedUsuario.id);
+
+      if (updatedUsuario) {
+        setSelectedUsuario(updatedUsuario);
+      }
+
+      await loadUserVinculos(selectedUsuario.id);
+      setVinculoNoticeType("success");
+      setVinculoNotice("Usuário vinculado com sucesso.");
+    } catch (error: any) {
+      setVinculoNoticeType("error");
+      setVinculoNotice(error?.message || "Erro ao vincular usuario a instituicao.");
+    } finally {
+      setIsVinculandoInstituicao(false);
     }
   };
 
@@ -277,7 +410,7 @@ export function ModeradorPage() {
       return;
     }
 
-    let parsedUser: { tipo?: string } | null = null;
+    let parsedUser: { tipo?: string; precisaTrocarSenha?: boolean } | null = null;
     try {
       parsedUser = JSON.parse(userData);
     } catch {
@@ -287,6 +420,11 @@ export function ModeradorPage() {
 
     if (parsedUser?.tipo !== "moderador") {
       navigate("/dashboard");
+      return;
+    }
+
+    if (parsedUser?.precisaTrocarSenha) {
+      navigate("/trocar-senha", { replace: true });
       return;
     }
 
@@ -338,6 +476,10 @@ export function ModeradorPage() {
   const getUserStatusBadge = (usuario: ModeradorUsuario) => {
     if (usuario.bloqueado) {
       return <Badge className="bg-red-100 text-red-700 border-red-200">Bloqueado</Badge>;
+    }
+
+    if (usuario.tipo_usuario === "donatario" && Number(usuario.instituicoes_aprovadas || 0) === 0) {
+      return <Badge className="bg-amber-100 text-amber-700 border-amber-200">Pendente</Badge>;
     }
 
     return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Ativo</Badge>;
@@ -470,7 +612,7 @@ export function ModeradorPage() {
             )}
             <h1 className="text-2xl sm:text-3xl font-semibold text-teal-950">{sectionTitle}</h1>
           </div>
-          {(isUpdatingUser || isSubmittingAction || isUpdatingVinculo) && (
+          {isSubmittingAction && (
             <div className="flex items-center gap-2 text-sm text-teal-700">
               <Loader2 className="w-4 h-4 animate-spin" />
               Atualizando...
@@ -526,18 +668,14 @@ export function ModeradorPage() {
               <CardTitle className="text-2xl text-teal-900">Gestão de Usuários</CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
-              {userActionFeedback && (
-                <div className="mb-4 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-sm text-teal-800">
-                  {userActionFeedback}
-                </div>
-              )}
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-teal-200">
                       <th className="text-left py-3 px-2 text-teal-900">Usuário</th>
                       <th className="text-left py-3 px-2 text-teal-900 hidden md:table-cell">Tipo</th>
-                      <th className="text-left py-3 px-2 text-teal-900 hidden lg:table-cell">Situação</th>
+                      <th className="text-left py-3 px-2 text-teal-900 hidden lg:table-cell">Status</th>
+                      <th className="text-left py-3 px-2 text-teal-900 hidden lg:table-cell">Senha</th>
                       <th className="text-right py-3 px-2 text-teal-900">Ações</th>
                     </tr>
                   </thead>
@@ -564,10 +702,10 @@ export function ModeradorPage() {
                           </Badge>
                         </td>
                         <td className="py-3 px-2 hidden lg:table-cell text-teal-800">
-                          <div className="flex flex-wrap gap-2">
-                            {getUserStatusBadge(usuario)}
-                            {getPasswordBadge(usuario)}
-                          </div>
+                          {getUserStatusBadge(usuario)}
+                        </td>
+                        <td className="py-3 px-2 hidden lg:table-cell text-teal-800">
+                          {getPasswordBadge(usuario)}
                         </td>
                         <td className="py-3 px-2 text-right">
                           <Button
@@ -1001,6 +1139,8 @@ export function ModeradorPage() {
           setShowUserActionsModal(open);
           if (!open) {
             setSelectedUsuario(null);
+            setUserActionFeedback("");
+            setUserActionFeedbackType("info");
           }
         }}
       >
@@ -1014,11 +1154,26 @@ export function ModeradorPage() {
             </DialogDescription>
           </DialogHeader>
 
+            {userActionFeedback && (
+              <div
+                className={`rounded-lg border px-3 py-2 text-sm ${
+                  userActionFeedbackType === "error"
+                    ? "border-red-200 bg-red-50 text-red-800"
+                    : userActionFeedbackType === "success"
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                      : "border-teal-200 bg-teal-50 text-teal-800"
+                }`}
+              >
+                {userActionFeedback}
+              </div>
+            )}
+
           {selectedUsuario && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 py-2">
               <Button
                 variant="outline"
                 className="justify-start border-teal-300 text-teal-800 hover:bg-teal-50"
+                  disabled={isUpdatingUser}
                 onClick={() => {
                   setShowUserActionsModal(false);
                   handleOpenUserVinculos(selectedUsuario);
@@ -1030,6 +1185,7 @@ export function ModeradorPage() {
               <Button
                 variant="outline"
                 className="justify-start border-teal-300 text-teal-800 hover:bg-teal-50"
+                disabled={isUpdatingUser}
                 onClick={() => handleUserAction(selectedUsuario.id, "tornarModerador")}
               >
                 <Shield className="w-4 h-4 mr-2" />
@@ -1038,6 +1194,7 @@ export function ModeradorPage() {
               <Button
                 variant="outline"
                 className="justify-start border-teal-300 text-teal-800 hover:bg-teal-50"
+                disabled={isUpdatingUser}
                 onClick={() => handleUserAction(selectedUsuario.id, "tornarDonatario")}
               >
                 <User className="w-4 h-4 mr-2" />
@@ -1046,6 +1203,7 @@ export function ModeradorPage() {
               <Button
                 variant="outline"
                 className="justify-start border-teal-300 text-teal-800 hover:bg-teal-50"
+                disabled={isUpdatingUser}
                 onClick={() => handleUserAction(selectedUsuario.id, selectedUsuario.bloqueado ? "desbloquear" : "bloquear")}
               >
                 <Ban className="w-4 h-4 mr-2" />
@@ -1054,6 +1212,7 @@ export function ModeradorPage() {
               <Button
                 variant="outline"
                 className="justify-start border-teal-300 text-teal-800 hover:bg-teal-50"
+                disabled={isUpdatingUser}
                 onClick={() =>
                   handleUserAction(
                     selectedUsuario.id,
@@ -1066,6 +1225,7 @@ export function ModeradorPage() {
               </Button>
               <Button
                 className="justify-start bg-teal-700 hover:bg-teal-800 text-white"
+                disabled={isUpdatingUser}
                 onClick={() => handleUserAction(selectedUsuario.id, "trocarSenha")}
               >
                 <RefreshCw className="w-4 h-4 mr-2" />
@@ -1093,6 +1253,10 @@ export function ModeradorPage() {
           if (!open) {
             setSelectedUsuario(null);
             setUserVinculos([]);
+            setResultadosBuscaInstituicao([]);
+            setBuscaInstituicao("");
+            setVinculoNotice("");
+            setVinculoNoticeType("info");
           }
         }}
       >
@@ -1105,6 +1269,68 @@ export function ModeradorPage() {
                 : "Gerencie os vínculos de instituição deste usuário."}
             </DialogDescription>
           </DialogHeader>
+
+          {vinculoNotice && (
+            <div
+              className={`rounded-lg border px-3 py-2 text-sm ${
+                vinculoNoticeType === "error"
+                  ? "border-red-200 bg-red-50 text-red-800"
+                  : vinculoNoticeType === "success"
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                    : "border-teal-200 bg-teal-50 text-teal-800"
+              }`}
+            >
+              {vinculoNotice}
+            </div>
+          )}
+
+          <div className="rounded-xl border border-teal-100 bg-teal-50/70 p-4 space-y-3">
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+              <Input
+                value={buscaInstituicao}
+                onChange={(e) => setBuscaInstituicao(e.target.value)}
+                placeholder="Buscar instituição por nome ou CNPJ"
+                className="border-teal-200 bg-white"
+              />
+              <Button
+                type="button"
+                onClick={handleBuscarInstituicoesUsuario}
+                disabled={isBuscandoInstituicoes || isVinculandoInstituicao}
+                className="bg-teal-700 hover:bg-teal-800 text-white"
+              >
+                <Search className="w-4 h-4 mr-2" />
+                {isBuscandoInstituicoes ? "Buscando..." : "Buscar"}
+              </Button>
+            </div>
+
+            {resultadosBuscaInstituicao.length > 0 && (
+              <div className="max-h-44 overflow-y-auto space-y-2 pr-1">
+                {resultadosBuscaInstituicao.map((instituicao) => (
+                  <div
+                    key={instituicao.id}
+                    className="flex flex-col gap-3 rounded-lg border border-teal-100 bg-white p-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium text-teal-900">{instituicao.nome}</p>
+                      <p className="text-sm text-teal-700">CNPJ: {instituicao.cnpj}</p>
+                      <p className="text-xs text-teal-600">
+                        {instituicao.cidade} / {instituicao.estado} · {instituicao.status}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      className="bg-teal-700 hover:bg-teal-800 text-white"
+                      disabled={isVinculandoInstituicao}
+                      onClick={() => handleVincularInstituicao(instituicao.id)}
+                    >
+                      <UserPlus className="w-4 h-4 mr-2" />
+                      Tornar membro
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {isLoadingVinculos ? (
             <div className="py-8 flex items-center justify-center gap-2 text-teal-700">
@@ -1132,7 +1358,7 @@ export function ModeradorPage() {
                         <Button
                           size="sm"
                           className="bg-green-600 hover:bg-green-700 text-white"
-                          disabled={isUpdatingVinculo}
+                          disabled={isUpdatingVinculo || isVinculandoInstituicao}
                           onClick={() => handleUserVinculoAction(vinculo.id, "aprovar")}
                         >
                           Aprovar
@@ -1143,7 +1369,7 @@ export function ModeradorPage() {
                           size="sm"
                           variant="outline"
                           className="border-amber-300 text-amber-700 hover:bg-amber-50"
-                          disabled={isUpdatingVinculo}
+                          disabled={isUpdatingVinculo || isVinculandoInstituicao}
                           onClick={() => handleUserVinculoAction(vinculo.id, "pendenciar")}
                         >
                           Pendenciar
@@ -1154,7 +1380,7 @@ export function ModeradorPage() {
                           size="sm"
                           variant="outline"
                           className="border-rose-300 text-rose-700 hover:bg-rose-50"
-                          disabled={isUpdatingVinculo}
+                          disabled={isUpdatingVinculo || isVinculandoInstituicao}
                           onClick={() => handleUserVinculoAction(vinculo.id, "rejeitar")}
                         >
                           Rejeitar
@@ -1163,7 +1389,7 @@ export function ModeradorPage() {
                       <Button
                         size="sm"
                         className="bg-slate-700 hover:bg-slate-800 text-white"
-                        disabled={isUpdatingVinculo}
+                        disabled={isUpdatingVinculo || isVinculandoInstituicao}
                         onClick={() => handleUserVinculoAction(vinculo.id, "desvincular")}
                       >
                         Desvincular

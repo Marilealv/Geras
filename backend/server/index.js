@@ -234,6 +234,30 @@ async function createPendingMembership(instituicaoId, usuarioId) {
   return result.rows[0];
 }
 
+async function createApprovedMembership(instituicaoId, usuarioId, aprovadoPorUsuarioId, perfil = "membro") {
+  const result = await pool.query(
+    `INSERT INTO instituicao_usuarios
+      (instituicao_id, usuario_id, perfil, status, solicitado_em, aprovado_em, aprovado_por_usuario_id, motivo_rejeicao, atualizado_em)
+     VALUES ($1, $2, $3, 'aprovado', NOW(), NOW(), $4, NULL, NOW())
+     ON CONFLICT (instituicao_id, usuario_id)
+     DO UPDATE SET
+       perfil = CASE
+         WHEN instituicao_usuarios.perfil IN ('proprietario', 'admin') THEN instituicao_usuarios.perfil
+         ELSE EXCLUDED.perfil
+       END,
+       status = 'aprovado',
+       solicitado_em = COALESCE(instituicao_usuarios.solicitado_em, EXCLUDED.solicitado_em),
+       aprovado_em = NOW(),
+       aprovado_por_usuario_id = $4,
+       motivo_rejeicao = NULL,
+       atualizado_em = NOW()
+     RETURNING id, instituicao_id, usuario_id, perfil, status, solicitado_em, aprovado_em, motivo_rejeicao`,
+    [instituicaoId, usuarioId, perfil, aprovadoPorUsuarioId]
+  );
+
+  return result.rows[0];
+}
+
 /**
  * Faz upload de arquivo para Cloudinary em pasta específica
  * @param {Buffer} fileBuffer - Buffer do arquivo
@@ -473,6 +497,59 @@ app.post("/api/auth/logout", authMiddleware, async (req, res) => {
     }
 
     return res.status(500).json({ message: "Erro interno ao finalizar sessao." });
+  }
+});
+
+app.patch("/api/auth/me/password", authMiddleware, async (req, res) => {
+  const currentPassword = String(req.body?.currentPassword || "").trim();
+  const novaSenha = String(req.body?.novaSenha || "").trim();
+
+  if (!currentPassword || !novaSenha) {
+    return res.status(400).json({ message: "Senha atual e nova senha sao obrigatorias." });
+  }
+
+  if (novaSenha.length < 6) {
+    return res.status(400).json({ message: "A nova senha deve ter ao menos 6 caracteres." });
+  }
+
+  try {
+    const result = await pool.query(
+      "SELECT id, senha, email, tipo_usuario, nome_responsavel, telefone FROM usuarios WHERE id = $1 LIMIT 1",
+      [req.user.id]
+    );
+
+    const user = result.rows[0];
+
+    if (!user) {
+      return res.status(404).json({ message: "Usuario nao encontrado." });
+    }
+
+    const isValidPassword = await bcrypt.compare(currentPassword, user.senha);
+
+    if (!isValidPassword) {
+      return res.status(401).json({ message: "Senha atual invalida." });
+    }
+
+    const senhaHash = await bcrypt.hash(novaSenha, 12);
+
+    await pool.query(
+      "UPDATE usuarios SET senha = $2, precisa_trocar_senha = FALSE WHERE id = $1",
+      [req.user.id, senhaHash]
+    );
+
+    return res.json({
+      usuario: {
+        id: user.id,
+        email: user.email,
+        tipo: user.tipo_usuario,
+        nome: user.nome_responsavel,
+        telefone: user.telefone,
+        precisaTrocarSenha: false,
+      },
+    });
+  } catch (error) {
+    console.error("Erro ao trocar senha do usuario:", error);
+    return res.status(500).json({ message: "Erro interno ao trocar senha." });
   }
 });
 
@@ -1090,6 +1167,39 @@ app.patch("/api/moderador/usuarios/:id", authMiddleware, moderadorMiddleware, as
   } catch (error) {
     console.error("Erro ao atualizar usuario:", error);
     return res.status(500).json({ message: "Erro interno ao atualizar usuario." });
+  }
+});
+
+app.post("/api/moderador/usuarios/:id/vinculos", authMiddleware, moderadorMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const instituicaoId = Number(req.body?.instituicaoId);
+
+  if (!Number.isFinite(instituicaoId)) {
+    return res.status(400).json({ message: "Instituicao invalida." });
+  }
+
+  try {
+    const userResult = await pool.query("SELECT id FROM usuarios WHERE id = $1 LIMIT 1", [id]);
+
+    if (!userResult.rowCount) {
+      return res.status(404).json({ message: "Usuario nao encontrado." });
+    }
+
+    const instituicaoResult = await pool.query(
+      "SELECT id FROM instituicoes WHERE id = $1 LIMIT 1",
+      [instituicaoId]
+    );
+
+    if (!instituicaoResult.rowCount) {
+      return res.status(404).json({ message: "Instituicao nao encontrada." });
+    }
+
+    const vinculo = await createApprovedMembership(instituicaoId, Number(id), req.user.id, "membro");
+
+    return res.status(201).json({ vinculo });
+  } catch (error) {
+    console.error("Erro ao vincular usuario a instituicao:", error);
+    return res.status(500).json({ message: "Erro interno ao vincular usuario a instituicao." });
   }
 });
 
