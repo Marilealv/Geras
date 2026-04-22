@@ -236,6 +236,24 @@ async function createPendingMembership(instituicaoId, usuarioId) {
 }
 
 async function createApprovedMembership(instituicaoId, usuarioId, aprovadoPorUsuarioId, perfil = "membro") {
+  // Validação: perfil proprietario só é permitido se o usuário for o criador da instituição
+  if (perfil === "proprietario") {
+    const instituicaoResult = await pool.query(
+      "SELECT usuario_id FROM instituicoes WHERE id = $1 LIMIT 1",
+      [instituicaoId]
+    );
+
+    if (!instituicaoResult.rowCount || instituicaoResult.rows[0].usuario_id !== usuarioId) {
+      throw new Error("Apenas o criador da instituição pode ter o perfil proprietario.");
+    }
+  }
+
+  // Validação: perfil admin não deve ser atribuído automaticamente
+  // (somente proprietario e membro são permitidos)
+  if (!["proprietario", "membro"].includes(perfil)) {
+    perfil = "membro";
+  }
+
   const result = await pool.query(
     `INSERT INTO instituicao_usuarios
       (instituicao_id, usuario_id, perfil, status, solicitado_em, aprovado_em, aprovado_por_usuario_id, motivo_rejeicao, atualizado_em)
@@ -243,7 +261,7 @@ async function createApprovedMembership(instituicaoId, usuarioId, aprovadoPorUsu
      ON CONFLICT (instituicao_id, usuario_id)
      DO UPDATE SET
        perfil = CASE
-         WHEN instituicao_usuarios.perfil IN ('proprietario', 'admin') THEN instituicao_usuarios.perfil
+         WHEN instituicao_usuarios.perfil = 'proprietario' THEN instituicao_usuarios.perfil
          ELSE EXCLUDED.perfil
        END,
        status = 'aprovado',

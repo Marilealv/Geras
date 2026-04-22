@@ -40,6 +40,9 @@ export function registerInstituicoesRoutes({
 
       const instituicao = result.rows[0];
 
+      // Inserir criador como proprietario
+      // Apenas o criador (req.user.id) pode ter perfil proprietario
+      // A trigger no banco de dados garante essa restrição
       await pool.query(
         `INSERT INTO instituicao_usuarios
           (instituicao_id, usuario_id, perfil, status, solicitado_em, aprovado_em, aprovado_por_usuario_id, atualizado_em)

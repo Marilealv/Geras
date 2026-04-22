@@ -385,20 +385,35 @@ export function registerModeradorRoutes({
       }
 
       if (action === "aprovar") {
+        // Validação: garantir que só proprietarios mantêm seu perfil ao aprovar
+        // Todos os demais são/permanecem como 'membro'
+        const vinculoExistente = await pool.query(
+          `SELECT perfil FROM instituicao_usuarios WHERE id = $1 LIMIT 1`,
+          [vinculoId]
+        );
+
+        if (!vinculoExistente.rowCount) {
+          return res.status(404).json({ message: "Vínculo não encontrado." });
+        }
+
+        // Se não for proprietario, garante que fica como membro
+        const perfilFinal = vinculoExistente.rows[0].perfil === "proprietario" ? "proprietario" : "membro";
+
         const result = await pool.query(
           `UPDATE instituicao_usuarios
            SET status = 'aprovado',
                aprovado_em = NOW(),
                aprovado_por_usuario_id = $2,
                motivo_rejeicao = NULL,
+               perfil = $3,
                atualizado_em = NOW()
            WHERE id = $1
            RETURNING id, instituicao_id, usuario_id, perfil, status, solicitado_em, aprovado_em, motivo_rejeicao`,
-          [vinculoId, req.user.id]
+          [vinculoId, req.user.id, perfilFinal]
         );
 
         if (!result.rowCount) {
-          return res.status(404).json({ message: "Vinculo nao encontrado." });
+          return res.status(404).json({ message: "Vínculo não encontrado." });
         }
 
         return res.json({ vinculo: result.rows[0] });

@@ -48,6 +48,7 @@ interface Idoso {
   musicaFavorita?: string;
   comidaFavorita?: string;
   necessidades?: Necessidade[];
+  userCanEdit?: boolean;
 }
 
 interface InstituicaoPerfil {
@@ -148,6 +149,7 @@ export function PerfilIdosoPage() {
             tipo: item.tipo,
             concluida_em: item.concluida_em,
           })),
+          userCanEdit: apiIdoso.user_can_edit || false,
         };
 
         if (mappedIdoso.dataAniversario) {
@@ -208,10 +210,7 @@ export function PerfilIdosoPage() {
   }, [idosoId]);
 
   const hasActiveSession = Boolean(authUser && getAuthToken());
-  const canManageProfile =
-    hasActiveSession &&
-    (authUser?.tipo === "moderador" ||
-      (authUser?.tipo === "donatario" && authUser.id === instituicao?.usuarioId));
+  const canManageProfile = hasActiveSession && idoso?.userCanEdit === true;
   const isEditMode = Boolean(canManageProfile && isEditing);
   const quickAccessPath = authUser?.tipo === "moderador" ? "/moderador" : "/dashboard";
   const quickAccessLabel = authUser?.tipo === "moderador" ? "Moderador" : "Minha instituição";

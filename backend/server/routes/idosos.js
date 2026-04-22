@@ -118,6 +118,8 @@ export function registerIdososRoutes({
 
   app.get("/api/idosos/:id", async (req, res) => {
     const { id } = req.params;
+    const userId = req.user?.id;
+    const isModerador = req.user?.tipo === "moderador";
 
     try {
       const idosoResult = await pool.query(
@@ -149,6 +151,23 @@ export function registerIdososRoutes({
         return res.status(404).json({ message: "Idoso nao encontrado." });
       }
 
+      // Verificar se o usuário autenticado pode editar o idoso
+      let userCanEdit = false;
+      if (userId) {
+        if (isModerador) {
+          userCanEdit = true;
+        } else {
+          // Verificar se o usuário tem vínculo aprovado com a instituição do idoso
+          const permissionResult = await pool.query(
+            `SELECT 1 FROM instituicao_usuarios
+             WHERE instituicao_id = $1 AND usuario_id = $2 AND status = 'aprovado'
+             LIMIT 1`,
+            [idosoResult.rows[0].instituicao_id, userId]
+          );
+          userCanEdit = permissionResult.rowCount > 0;
+        }
+      }
+
       const necessidadesResult = await pool.query(
         "SELECT id, item, tipo, concluida_em FROM idoso_necessidades WHERE idoso_id = $1 AND concluida_em IS NULL ORDER BY criado_em DESC",
         [id]
@@ -166,6 +185,7 @@ export function registerIdososRoutes({
           hobbies: idosoResult.rows[0].hobbies,
           musica_favorita: idosoResult.rows[0].musica_favorita,
           comida_favorita: idosoResult.rows[0].comida_favorita,
+          user_can_edit: userCanEdit,
           instituicao: {
             id: idosoResult.rows[0].instituicao_id,
             usuario_id: idosoResult.rows[0].instituicao_usuario_id,
