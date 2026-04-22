@@ -2,6 +2,7 @@ export function registerIdososRoutes({
   app,
   pool,
   authMiddleware,
+  optionalAuthMiddleware,
   getApprovedMembership,
   resolveImageUrl,
   APPROVED_INSTITUICAO_STATUS,
@@ -116,7 +117,7 @@ export function registerIdososRoutes({
     }
   });
 
-  app.get("/api/idosos/:id", async (req, res) => {
+  app.get("/api/idosos/:id", optionalAuthMiddleware, async (req, res) => {
     const { id } = req.params;
     const userId = req.user?.id;
     const isModerador = req.user?.tipo === "moderador";

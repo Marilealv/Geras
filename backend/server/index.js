@@ -168,6 +168,64 @@ async function authMiddleware(req, res, next) {
 }
 
 /**
+ * Middleware de autenticação opcional - permite passar sem token, mas parseia se presente
+ * Usado para rotas que têm acesso público mas oferecem funcionalidades extras para usuários autenticados
+ */
+async function optionalAuthMiddleware(req, res, next) {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    return next();
+  }
+
+  const token = authHeader.replace("Bearer ", "").trim();
+
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+
+    if (typeof payload !== "object" || payload === null) {
+      return next();
+    }
+
+    const tokenHash = hashToken(token);
+    let revokedTokenResult;
+
+    try {
+      revokedTokenResult = await pool.query(
+        "SELECT 1 FROM auth_tokens_revogados WHERE token_hash = $1 AND expira_em > NOW() LIMIT 1",
+        [tokenHash]
+      );
+    } catch (error) {
+      console.error("Erro ao verificar token revogado:", error);
+      return next();
+    }
+
+    if (revokedTokenResult.rowCount) {
+      return next();
+    }
+
+    const expiresAt = getDateFromUnixSeconds(Number(payload.exp));
+
+    req.user = {
+      id: payload.sub,
+      email: payload.email,
+      tipo: payload.tipo,
+    };
+
+    req.auth = {
+      token,
+      tokenHash,
+      tokenId: payload.jti,
+      expiresAt,
+    };
+  } catch {
+    // Falhe silenciosamente se token inválido
+  }
+
+  return next();
+}
+
+/**
  * Middleware de autorização para moderadores
  */
 function moderadorMiddleware(req, res, next) {
@@ -342,6 +400,7 @@ registerIdososRoutes({
   app,
   pool,
   authMiddleware,
+  optionalAuthMiddleware,
   getApprovedMembership,
   resolveImageUrl,
   APPROVED_INSTITUICAO_STATUS,
