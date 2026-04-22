@@ -25,10 +25,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../components/ui/dialog";
+import { FlashToast } from "../components/ui/flash-toast";
 import { Footer } from "../components/footer";
 import { getApiUrl } from "../config/api";
 import { clearAuthSession, getAuthHeaders, getAuthToken, hydrateAuthSessionFromToken } from "../lib/auth";
 import { setDashboardFlash } from "../lib/dashboard-flash";
+import { useFlashMessage } from "../lib/use-flash-message";
 import { NecessidadesPanel } from "./perfil-idoso/necessidades-panel";
 
 interface Necessidade {
@@ -37,21 +39,19 @@ interface Necessidade {
   tipo: "urgente" | "desejado";
   concluida_em?: string | null;
 }
-
+  const { flashMessage, isFlashVisible, showFlash, dismissFlash } = useFlashMessage();
 interface Idoso {
   id: number;
   nome: string;
   idade: number;
   dataAniversario?: string;
   foto?: string;
-  historia?: string;
   hobbies?: string;
   musicaFavorita?: string;
   comidaFavorita?: string;
   necessidades?: Necessidade[];
   userCanEdit?: boolean;
 }
-
 interface InstituicaoPerfil {
   usuarioId: number;
   nomeInstituicao: string;
@@ -59,40 +59,37 @@ interface InstituicaoPerfil {
   cidade?: string;
   estado?: string;
   cep?: string;
-  telefone?: string;
 }
 
 interface AuthUser {
   id: number;
-  tipo: "moderador" | "donatario";
+      showFlash("Informe o item da necessidade.", "error");
 }
 
 export function PerfilIdosoPage() {
   const { id } = useParams();
   const idosoId = Number(id);
-  const navigate = useNavigate();
   const [idoso, setIdoso] = useState<Idoso | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
-  const [instituicao, setInstituicao] = useState<InstituicaoPerfil | null>(null);
+      showFlash(isEditingNecessidade ? "Necessidade atualizada." : "Necessidade adicionada.", "success");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
+      showFlash(error?.message || "Erro ao salvar necessidade.", "error");
   const [editedIdoso, setEditedIdoso] = useState<Idoso | null>(null);
   const [necessidadeItem, setNecessidadeItem] = useState("");
   const [necessidadeTipo, setNecessidadeTipo] = useState<"urgente" | "desejado">("urgente");
   const [editingNecessidadeId, setEditingNecessidadeId] = useState<number | null>(null);
   const [isSavingNecessidade, setIsSavingNecessidade] = useState(false);
-  const [necessidadeFeedback, setNecessidadeFeedback] = useState("");
+  const { flashMessage, isFlashVisible, showFlash, dismissFlash } = useFlashMessage();
 
-  useEffect(() => {
     hydrateAuthSessionFromToken();
 
-    const userData = localStorage.getItem("user");
+      showFlash("Necessidade concluída.", "success");
     if (!userData) {
       return;
     }
 
-    try {
+      showFlash(error?.message || "Erro ao concluir necessidade.", "error");
       const parsedUser = JSON.parse(userData);
       if (parsedUser?.id && parsedUser?.tipo) {
         setAuthUser({
@@ -100,14 +97,13 @@ export function PerfilIdosoPage() {
           tipo: parsedUser.tipo,
         });
       }
-    } catch {
       setAuthUser(null);
     }
   }, []);
 
-  // Função para calcular idade a partir da data de nascimento
+      showFlash("Necessidade removida.", "success");
   const calculateAge = (birthDate: string): number => {
-    if (!birthDate) return 0;
+      showFlash(error?.message || "Erro ao remover necessidade.", "error");
     const today = new Date();
     const birth = new Date(birthDate);
     let age = today.getFullYear() - birth.getFullYear();
@@ -115,6 +111,7 @@ export function PerfilIdosoPage() {
     if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
       age--;
     }
+      <FlashToast flashMessage={flashMessage} isVisible={isFlashVisible} onClose={dismissFlash} />
     return age;
   };
 
@@ -222,7 +219,6 @@ export function PerfilIdosoPage() {
       return;
     }
     resetNecessidadeForm();
-    setNecessidadeFeedback("");
     setIsEditing(true);
   };
 
@@ -277,7 +273,6 @@ export function PerfilIdosoPage() {
   const handleCancelEditing = () => {
     setEditedIdoso(idoso);
     resetNecessidadeForm();
-    setNecessidadeFeedback("");
     setIsEditing(false);
   };
 
@@ -291,7 +286,6 @@ export function PerfilIdosoPage() {
     setNecessidadeItem(necessidade.item);
     setNecessidadeTipo(necessidade.tipo);
     setEditingNecessidadeId(necessidade.id);
-    setNecessidadeFeedback("");
   };
 
   const handleSaveNecessidade = async () => {
@@ -299,13 +293,12 @@ export function PerfilIdosoPage() {
 
     const item = necessidadeItem.trim();
     if (!item) {
-      setNecessidadeFeedback("Informe o item da necessidade.");
+      showFlash("Informe o item da necessidade.", "error");
       return;
     }
 
     try {
       setIsSavingNecessidade(true);
-      setNecessidadeFeedback("");
 
       const isEditingNecessidade = editingNecessidadeId !== null;
       const endpoint = isEditingNecessidade
@@ -338,9 +331,9 @@ export function PerfilIdosoPage() {
 
       await loadIdosoData();
       resetNecessidadeForm();
-      setNecessidadeFeedback(isEditingNecessidade ? "Necessidade atualizada." : "Necessidade adicionada.");
+      showFlash(isEditingNecessidade ? "Necessidade atualizada." : "Necessidade adicionada.", "success");
     } catch (error: any) {
-      setNecessidadeFeedback(error?.message || "Erro ao salvar necessidade.");
+      showFlash(error?.message || "Erro ao salvar necessidade.", "error");
     } finally {
       setIsSavingNecessidade(false);
     }
@@ -351,7 +344,6 @@ export function PerfilIdosoPage() {
 
     try {
       setIsSavingNecessidade(true);
-      setNecessidadeFeedback("");
 
       const response = await fetch(getApiUrl(`/api/idosos/${idosoId}/necessidades/${necessidadeId}/concluir`), {
         method: "PATCH",
@@ -373,12 +365,12 @@ export function PerfilIdosoPage() {
       }
 
       await loadIdosoData();
-      setNecessidadeFeedback("Necessidade concluída.");
+      showFlash("Necessidade concluída.", "success");
       if (editingNecessidadeId === necessidadeId) {
         resetNecessidadeForm();
       }
     } catch (error: any) {
-      setNecessidadeFeedback(error?.message || "Erro ao concluir necessidade.");
+      showFlash(error?.message || "Erro ao concluir necessidade.", "error");
     } finally {
       setIsSavingNecessidade(false);
     }
@@ -389,7 +381,6 @@ export function PerfilIdosoPage() {
 
     try {
       setIsSavingNecessidade(true);
-      setNecessidadeFeedback("");
 
       const response = await fetch(getApiUrl(`/api/idosos/${idosoId}/necessidades/${necessidadeId}`), {
         method: "DELETE",
@@ -419,9 +410,9 @@ export function PerfilIdosoPage() {
       if (editingNecessidadeId === necessidadeId) {
         resetNecessidadeForm();
       }
-      setNecessidadeFeedback("Necessidade removida.");
+      showFlash("Necessidade removida.", "success");
     } catch (error: any) {
-      setNecessidadeFeedback(error?.message || "Erro ao remover necessidade.");
+      showFlash(error?.message || "Erro ao remover necessidade.", "error");
     } finally {
       setIsSavingNecessidade(false);
     }
@@ -499,6 +490,8 @@ export function PerfilIdosoPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-teal-50 flex flex-col">
+      <FlashToast flashMessage={flashMessage} isVisible={isFlashVisible} onClose={dismissFlash} />
+
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-teal-100 sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
@@ -714,7 +707,6 @@ export function PerfilIdosoPage() {
               necessidadeTipo={necessidadeTipo}
               onNecessidadeTipoChange={setNecessidadeTipo}
               isSavingNecessidade={isSavingNecessidade}
-              necessidadeFeedback={necessidadeFeedback}
               urgentes={urgentes}
               desejados={desejados}
               onSaveNecessidade={handleSaveNecessidade}

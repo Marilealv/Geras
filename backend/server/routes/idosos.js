@@ -7,9 +7,51 @@ export function registerIdososRoutes({
   resolveImageUrl,
   APPROVED_INSTITUICAO_STATUS,
 }) {
+  const calculateAgeFromBirthDate = (birthDate) => {
+    if (!birthDate) return null;
+
+    const parsedDate = new Date(`${String(birthDate).slice(0, 10)}T00:00:00`);
+    if (Number.isNaN(parsedDate.getTime())) {
+      return null;
+    }
+
+    const today = new Date();
+    let age = today.getFullYear() - parsedDate.getFullYear();
+    const monthDiff = today.getMonth() - parsedDate.getMonth();
+
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < parsedDate.getDate())) {
+      age -= 1;
+    }
+
+    return age >= 0 ? age : null;
+  };
+
+  const sanitizeCpf = (value) => String(value || "").replace(/\D/g, "");
+
+  const isValidCpf = (cpf) => {
+    if (!/^\d{11}$/.test(cpf)) return false;
+    if (/^(\d)\1{10}$/.test(cpf)) return false;
+
+    const calculateDigit = (base, factor) => {
+      let total = 0;
+      for (const char of base) {
+        total += Number(char) * factor;
+        factor -= 1;
+      }
+      const remainder = total % 11;
+      return remainder < 2 ? 0 : 11 - remainder;
+    };
+
+    const firstDigit = calculateDigit(cpf.slice(0, 9), 10);
+    const secondDigit = calculateDigit(cpf.slice(0, 10), 11);
+
+    return firstDigit === Number(cpf[9]) && secondDigit === Number(cpf[10]);
+  };
+
   app.post("/api/idosos", authMiddleware, async (req, res) => {
     const {
       nome,
+      cpf,
       idade,
       dataAniversario,
       fotoImagemId,
@@ -20,8 +62,12 @@ export function registerIdososRoutes({
       necessidades,
     } = req.body ?? {};
 
-    if (!nome || !idade) {
-      return res.status(400).json({ message: "Nome e idade do idoso sao obrigatorios." });
+    const normalizedCpf = sanitizeCpf(cpf);
+    const calculatedAge = calculateAgeFromBirthDate(dataAniversario);
+    const normalizedAge = calculatedAge;
+
+    if (!nome || !Number.isFinite(normalizedAge) || normalizedAge <= 0 || !isValidCpf(normalizedCpf)) {
+      return res.status(400).json({ message: "Nome, CPF e data de nascimento validos do idoso sao obrigatorios." });
     }
 
     try {
@@ -47,15 +93,22 @@ export function registerIdososRoutes({
         });
       }
 
+      const existingCpfResult = await pool.query("SELECT id FROM idosos WHERE cpf = $1 LIMIT 1", [normalizedCpf]);
+
+      if (existingCpfResult.rowCount) {
+        return res.status(409).json({ message: "Ja existe um idoso cadastrado com este CPF." });
+      }
+
       const idosoResult = await pool.query(
         `INSERT INTO idosos
-         (instituicao_id, nome, idade, data_aniversario, imagem_id, historia, hobbies, musica_favorita, comida_favorita)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         (instituicao_id, nome, cpf, idade, data_aniversario, imagem_id, historia, hobbies, musica_favorita, comida_favorita)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          RETURNING id, nome, idade, data_aniversario, imagem_id, historia, hobbies, musica_favorita, comida_favorita`,
         [
           instituicao.id,
           nome,
-          idade,
+          normalizedCpf,
+          normalizedAge,
           dataAniversario || null,
           fotoImagemId || null,
           historia || null,
@@ -91,6 +144,10 @@ export function registerIdososRoutes({
         },
       });
     } catch (error) {
+      if (error?.code === "23505") {
+        return res.status(409).json({ message: "Ja existe um idoso cadastrado com este CPF." });
+      }
+
       console.error("Erro ao cadastrar idoso:", error);
       return res.status(500).json({ message: "Erro interno ao cadastrar idoso." });
     }
@@ -220,6 +277,15 @@ export function registerIdososRoutes({
       necessidades,
     } = req.body ?? {};
 
+    const recalculatedAge = calculateAgeFromBirthDate(dataAniversario);
+    const hasBirthDateInPayload = !(dataAniversario === undefined || dataAniversario === null || String(dataAniversario).trim() === "");
+
+    if (hasBirthDateInPayload && recalculatedAge === null) {
+      return res.status(400).json({ message: "Data de nascimento invalida." });
+    }
+
+    const normalizedUpdatedAge = recalculatedAge ?? (Number.isFinite(Number(idade)) ? Number(idade) : null);
+
     try {
       const isModerador = req.user?.tipo === "moderador";
 
@@ -240,7 +306,7 @@ export function registerIdososRoutes({
             [
               id,
               nome,
-              idade,
+              normalizedUpdatedAge,
               dataAniversario || null,
               fotoImagemId || null,
               historia || null,
@@ -271,7 +337,7 @@ export function registerIdososRoutes({
               id,
               req.user.id,
               nome,
-              idade,
+              normalizedUpdatedAge,
               dataAniversario || null,
               fotoImagemId || null,
               historia || null,

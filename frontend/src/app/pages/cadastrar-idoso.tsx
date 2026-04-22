@@ -26,13 +26,37 @@ export function CadastrarIdosoPage() {
   const [fotoFile, setFotoFile] = useState<File | null>(null);
   const [formData, setFormData] = useState({
     nome: "",
-    idade: "",
+    cpf: "",
     dataAniversario: "",
     historia: "",
     hobbies: "",
     musicaFavorita: "",
     comidaFavorita: "",
   });
+
+  const sanitizeCpf = (value: string) => value.replace(/\D/g, "");
+
+  const isValidCpf = (cpf: string) => {
+    const digits = sanitizeCpf(cpf);
+
+    if (!/^\d{11}$/.test(digits)) return false;
+    if (/^(\d)\1{10}$/.test(digits)) return false;
+
+    const calculateDigit = (base: string, factor: number) => {
+      let total = 0;
+      for (const char of base) {
+        total += Number(char) * factor;
+        factor -= 1;
+      }
+      const remainder = total % 11;
+      return remainder < 2 ? 0 : 11 - remainder;
+    };
+
+    const firstDigit = calculateDigit(digits.slice(0, 9), 10);
+    const secondDigit = calculateDigit(digits.slice(0, 10), 11);
+
+    return firstDigit === Number(digits[9]) && secondDigit === Number(digits[10]);
+  };
 
   const [necessidades, setNecessidades] = useState<Necessidade[]>([]);
   const [novoItem, setNovoItem] = useState("");
@@ -52,14 +76,36 @@ export function CadastrarIdosoPage() {
       setErrorMessage("Nome completo é obrigatório.");
       return false;
     }
-    if (!formData.idade.trim()) {
-      setErrorMessage("Idade é obrigatória.");
+
+    if (!formData.cpf.trim()) {
+      setErrorMessage("CPF é obrigatório.");
       return false;
     }
-    if (isNaN(Number(formData.idade)) || Number(formData.idade) <= 0) {
-      setErrorMessage("Idade deve ser um número válido maior que zero.");
+
+    if (!isValidCpf(formData.cpf)) {
+      setErrorMessage("CPF inválido.");
       return false;
     }
+
+    if (!formData.dataAniversario.trim()) {
+      setErrorMessage("Data de nascimento é obrigatória.");
+      return false;
+    }
+
+    const birthDate = new Date(`${formData.dataAniversario}T00:00:00`);
+    if (Number.isNaN(birthDate.getTime())) {
+      setErrorMessage("Data de nascimento inválida.");
+      return false;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (birthDate > today) {
+      setErrorMessage("A data de nascimento não pode estar no futuro.");
+      return false;
+    }
+
     setErrorMessage("");
     return true;
   };
@@ -105,7 +151,7 @@ export function CadastrarIdosoPage() {
         },
         body: JSON.stringify({
           nome: formData.nome,
-          idade: Number(formData.idade),
+          cpf: sanitizeCpf(formData.cpf),
           dataAniversario: formData.dataAniversario || null,
           fotoImagemId,
           historia: formData.historia,
@@ -229,36 +275,35 @@ export function CadastrarIdosoPage() {
                   />
                 </div>
 
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div>
-                    <Label htmlFor="idade" className="text-teal-900">
-                      Idade
-                    </Label>
-                    <Input
-                      id="idade"
-                      name="idade"
-                      type="number"
-                      value={formData.idade}
-                      onChange={handleChange}
-                      placeholder="75"
-                      className="mt-2 border-teal-200 focus:border-teal-500"
-                      required
-                    />
-                  </div>
+                <div>
+                  <Label htmlFor="cpf" className="text-teal-900">
+                    CPF
+                  </Label>
+                  <Input
+                    id="cpf"
+                    name="cpf"
+                    type="text"
+                    value={formData.cpf}
+                    onChange={handleChange}
+                    placeholder="000.000.000-00"
+                    className="mt-2 border-teal-200 focus:border-teal-500"
+                    required
+                  />
+                </div>
 
-                  <div>
-                    <Label htmlFor="dataAniversario" className="text-teal-900">
-                      Data de Aniversário
-                    </Label>
-                    <Input
-                      id="dataAniversario"
-                      name="dataAniversario"
-                      type="date"
-                      value={formData.dataAniversario}
-                      onChange={handleChange}
-                      className="mt-2 border-teal-200 focus:border-teal-500"
-                    />
-                  </div>
+                <div>
+                  <Label htmlFor="dataAniversario" className="text-teal-900">
+                    Data de Nascimento
+                  </Label>
+                  <Input
+                    id="dataAniversario"
+                    name="dataAniversario"
+                    type="date"
+                    value={formData.dataAniversario}
+                    onChange={handleChange}
+                    className="mt-2 border-teal-200 focus:border-teal-500"
+                    required
+                  />
                 </div>
 
                 <div>

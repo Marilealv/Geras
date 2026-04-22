@@ -218,8 +218,8 @@ export function ModeradorPage() {
         setSelectedUsuario(updatedUsuario);
       }
 
-      setUserActionFeedbackType("success");
-      setUserActionFeedback("Atualizado com sucesso.");
+      setUserActionFeedbackType("info");
+      setUserActionFeedback("");
       showFlash("Ação de usuário executada com sucesso.", "success");
     } catch (error: any) {
       setUserActionFeedbackType("error");
@@ -340,8 +340,8 @@ export function ModeradorPage() {
       }
 
       await loadUserVinculos(selectedUsuario.id);
-      setVinculoNoticeType("success");
-      setVinculoNotice("Vínculo atualizado com sucesso.");
+      setVinculoNoticeType("info");
+      setVinculoNotice("");
       showFlash("Vínculo de usuário atualizado com sucesso.", "success");
     } catch (error: any) {
       setVinculoNoticeType("error");
@@ -380,7 +380,7 @@ export function ModeradorPage() {
       }
 
       setResultadosBuscaInstituicao(payload.instituicoes || []);
-      setVinculoNoticeType("success");
+      setVinculoNoticeType("info");
       setVinculoNotice(
         payload.instituicoes?.length ? "Selecione uma instituição para tornar o usuário membro." : "Nenhuma instituição encontrada."
       );
@@ -424,8 +424,8 @@ export function ModeradorPage() {
       }
 
       await loadUserVinculos(selectedUsuario.id);
-      setVinculoNoticeType("success");
-      setVinculoNotice("Usuário vinculado com sucesso.");
+      setVinculoNoticeType("info");
+      setVinculoNotice("");
       showFlash("Usuário vinculado à instituição com sucesso.", "success");
     } catch (error: any) {
       setVinculoNoticeType("error");

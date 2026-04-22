@@ -18,7 +18,6 @@ interface NecessidadesPanelProps {
   necessidadeTipo: "urgente" | "desejado";
   onNecessidadeTipoChange: (value: "urgente" | "desejado") => void;
   isSavingNecessidade: boolean;
-  necessidadeFeedback: string;
   urgentes: Necessidade[];
   desejados: Necessidade[];
   onSaveNecessidade: () => void;
@@ -36,7 +35,6 @@ export function NecessidadesPanel({
   necessidadeTipo,
   onNecessidadeTipoChange,
   isSavingNecessidade,
-  necessidadeFeedback,
   urgentes,
   desejados,
   onSaveNecessidade,
@@ -92,12 +90,6 @@ export function NecessidadesPanel({
                   Cancelar edição
                 </Button>
               </div>
-            )}
-
-            {necessidadeFeedback && (
-              <p className="text-sm text-teal-700" role="status">
-                {necessidadeFeedback}
-              </p>
             )}
           </CardContent>
         </Card>

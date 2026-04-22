@@ -70,6 +70,7 @@ CREATE TABLE idosos (
   id BIGSERIAL PRIMARY KEY,
   instituicao_id BIGINT NOT NULL REFERENCES instituicoes(id) ON DELETE CASCADE,
   nome TEXT NOT NULL,
+  cpf VARCHAR(11) NOT NULL UNIQUE CHECK (cpf ~ '^[0-9]{11}$'),
   idade INTEGER NOT NULL CHECK (idade >= 0 AND idade <= 130),
   data_aniversario DATE,
   imagem_id BIGINT REFERENCES imagens(id) ON DELETE SET NULL,
