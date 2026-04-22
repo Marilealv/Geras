@@ -1,4 +1,4 @@
-import { CheckCircle, Edit, Plus } from "lucide-react";
+import { CheckCircle, Edit, Plus, Trash2 } from "lucide-react";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
@@ -11,7 +11,7 @@ interface Necessidade {
 }
 
 interface NecessidadesPanelProps {
-  isEditMode: boolean;
+  canManageNecessidades: boolean;
   editingNecessidadeId: number | null;
   necessidadeItem: string;
   onNecessidadeItemChange: (value: string) => void;
@@ -25,10 +25,11 @@ interface NecessidadesPanelProps {
   onResetNecessidadeForm: () => void;
   onEditNecessidade: (necessidade: Necessidade) => void;
   onConcluirNecessidade: (necessidadeId: number) => void;
+  onRemoverNecessidade: (necessidadeId: number) => void;
 }
 
 export function NecessidadesPanel({
-  isEditMode,
+  canManageNecessidades,
   editingNecessidadeId,
   necessidadeItem,
   onNecessidadeItemChange,
@@ -42,10 +43,11 @@ export function NecessidadesPanel({
   onResetNecessidadeForm,
   onEditNecessidade,
   onConcluirNecessidade,
+  onRemoverNecessidade,
 }: NecessidadesPanelProps) {
   return (
     <div className="space-y-6">
-      {isEditMode && (
+      {canManageNecessidades && (
         <Card className="border-teal-200 bg-white">
           <CardHeader>
             <CardTitle className="text-teal-900 flex items-center gap-2">
@@ -121,7 +123,7 @@ export function NecessidadesPanel({
                         </Badge>
                         <p className="text-teal-900 break-words">{item.item}</p>
                       </div>
-                      {isEditMode && (
+                      {canManageNecessidades && (
                         <div className="flex flex-col gap-2">
                           <Button
                             size="sm"
@@ -138,6 +140,15 @@ export function NecessidadesPanel({
                             disabled={isSavingNecessidade}
                           >
                             <CheckCircle className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => onRemoverNecessidade(item.id)}
+                            className="border-rose-300 text-rose-700 hover:bg-rose-50"
+                            disabled={isSavingNecessidade}
+                          >
+                            <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
                       )}
@@ -166,7 +177,7 @@ export function NecessidadesPanel({
                         </Badge>
                         <p className="text-teal-900 break-words">{item.item}</p>
                       </div>
-                      {isEditMode && (
+                      {canManageNecessidades && (
                         <div className="flex flex-col gap-2">
                           <Button
                             size="sm"
@@ -183,6 +194,15 @@ export function NecessidadesPanel({
                             disabled={isSavingNecessidade}
                           >
                             <CheckCircle className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => onRemoverNecessidade(item.id)}
+                            className="border-rose-300 text-rose-700 hover:bg-rose-50"
+                            disabled={isSavingNecessidade}
+                          >
+                            <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
                       )}

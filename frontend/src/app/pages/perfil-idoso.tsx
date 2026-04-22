@@ -28,6 +28,7 @@ import {
 import { Footer } from "../components/footer";
 import { getApiUrl } from "../config/api";
 import { clearAuthSession, getAuthHeaders, getAuthToken, hydrateAuthSessionFromToken } from "../lib/auth";
+import { setDashboardFlash } from "../lib/dashboard-flash";
 import { NecessidadesPanel } from "./perfil-idoso/necessidades-panel";
 
 interface Necessidade {
@@ -267,6 +268,8 @@ export function PerfilIdosoPage() {
       localStorage.setItem("idosos", JSON.stringify(idososAtualizados));
     }
 
+    setDashboardFlash("Dados do idoso atualizados com sucesso.", "success");
+
     setIdoso(editedIdoso);
     setIsEditing(false);
   };
@@ -381,6 +384,49 @@ export function PerfilIdosoPage() {
     }
   };
 
+  const handleRemoverNecessidade = async (necessidadeId: number) => {
+    if (!canManageProfile || !idosoId) return;
+
+    try {
+      setIsSavingNecessidade(true);
+      setNecessidadeFeedback("");
+
+      const response = await fetch(getApiUrl(`/api/idosos/${idosoId}/necessidades/${necessidadeId}`), {
+        method: "DELETE",
+        headers: {
+          ...getAuthHeaders(),
+        },
+      });
+
+      if (response.status === 401) {
+        clearAuthSession();
+        navigate("/login");
+        return;
+      }
+
+      if (!response.ok) {
+        let message = "Nao foi possivel remover a necessidade.";
+        try {
+          const payload = await response.json();
+          message = payload?.message || message;
+        } catch {
+          // Resposta sem corpo JSON
+        }
+        throw new Error(message);
+      }
+
+      await loadIdosoData();
+      if (editingNecessidadeId === necessidadeId) {
+        resetNecessidadeForm();
+      }
+      setNecessidadeFeedback("Necessidade removida.");
+    } catch (error: any) {
+      setNecessidadeFeedback(error?.message || "Erro ao remover necessidade.");
+    } finally {
+      setIsSavingNecessidade(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-teal-50 flex items-center justify-center">
@@ -437,6 +483,10 @@ export function PerfilIdosoPage() {
         const idosos = JSON.parse(idososData);
         const idososAtualizados = idosos.filter((i: Idoso) => i.id !== idosoId);
         localStorage.setItem("idosos", JSON.stringify(idososAtualizados));
+      }
+
+      if (backPath === "/dashboard") {
+        setDashboardFlash("Exclusão de idoso feita com sucesso.", "success");
       }
 
       navigate(backPath);
@@ -657,7 +707,7 @@ export function PerfilIdosoPage() {
             </div>
 
             <NecessidadesPanel
-              isEditMode={isEditMode}
+              canManageNecessidades={canManageProfile}
               editingNecessidadeId={editingNecessidadeId}
               necessidadeItem={necessidadeItem}
               onNecessidadeItemChange={setNecessidadeItem}
@@ -671,6 +721,7 @@ export function PerfilIdosoPage() {
               onResetNecessidadeForm={resetNecessidadeForm}
               onEditNecessidade={handleEditNecessidade}
               onConcluirNecessidade={handleConcluirNecessidade}
+              onRemoverNecessidade={handleRemoverNecessidade}
             />
           </div>
 

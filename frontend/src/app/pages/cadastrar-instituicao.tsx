@@ -15,6 +15,7 @@ import {
 } from "../components/ui/dialog";
 import { getApiUrl } from "../config/api";
 import { getAuthHeaders } from "../lib/auth";
+import { setDashboardFlash } from "../lib/dashboard-flash";
 import { uploadImageToCloudinary } from "../lib/uploads";
 
 interface InstituicaoBusca {
@@ -36,6 +37,7 @@ export function CadastrarInstituicaoPage() {
   const [resultadosBusca, setResultadosBusca] = useState<InstituicaoBusca[]>([]);
   const [instituicaoSelecionada, setInstituicaoSelecionada] = useState<InstituicaoBusca | null>(null);
   const [imagem, setImagem] = useState<File | null>(null);
+  const [dashboardFlashMessage, setDashboardFlashMessage] = useState("");
   const [formData, setFormData] = useState({
     nomeInstituicao: "",
     cnpj: "",
@@ -86,6 +88,7 @@ export function CadastrarInstituicaoPage() {
           return;
         }
 
+        setDashboardFlashMessage("Solicitação de vínculo enviada com sucesso.");
         setShowSuccessModal(true);
         return;
       }
@@ -126,6 +129,7 @@ export function CadastrarInstituicaoPage() {
           imagem_url: data.instituicao.imagem_url || imagemUrlLocal,
         })
       );
+      setDashboardFlashMessage("Instituição cadastrada com sucesso.");
       setShowSuccessModal(true);
     } catch (error) {
       if (error instanceof Error) {
@@ -157,6 +161,11 @@ export function CadastrarInstituicaoPage() {
 
   const handleCloseModal = () => {
     setShowSuccessModal(false);
+
+    if (dashboardFlashMessage) {
+      setDashboardFlash(dashboardFlashMessage, "success");
+    }
+
     navigate("/dashboard");
   };
 

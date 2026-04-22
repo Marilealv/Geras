@@ -135,4 +135,27 @@ export function registerIdosoNecessidadesRoutes({ app, pool, authMiddleware }) {
       return res.status(500).json({ message: "Erro interno ao concluir necessidade." });
     }
   });
+
+  app.delete("/api/idosos/:id/necessidades/:necessidadeId", authMiddleware, async (req, res) => {
+    const { id, necessidadeId } = req.params;
+
+    try {
+      const isAllowed = await canManageIdoso(req.user, id);
+      if (!isAllowed) {
+        return res.status(403).json({ message: "Acesso negado para gerenciar necessidades deste idoso." });
+      }
+
+      const currentNeed = await ensureNeedBelongsToIdoso(id, necessidadeId);
+      if (!currentNeed) {
+        return res.status(404).json({ message: "Necessidade nao encontrada para este idoso." });
+      }
+
+      await pool.query("DELETE FROM idoso_necessidades WHERE id = $1 AND idoso_id = $2", [necessidadeId, id]);
+
+      return res.status(204).send();
+    } catch (error) {
+      console.error("Erro ao remover necessidade:", error);
+      return res.status(500).json({ message: "Erro interno ao remover necessidade." });
+    }
+  });
 }

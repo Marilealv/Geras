@@ -9,6 +9,7 @@ import { Card, CardContent } from "../components/ui/card";
 import { Plus, X } from "lucide-react";
 import { getApiUrl } from "../config/api";
 import { getAuthHeaders } from "../lib/auth";
+import { setDashboardFlash } from "../lib/dashboard-flash";
 import { uploadImageToCloudinary } from "../lib/uploads";
 
 interface Necessidade {
@@ -128,6 +129,8 @@ export function CadastrarIdosoPage() {
         foto: data.idoso.foto_url,
       });
       localStorage.setItem("idosos", JSON.stringify(idososExistentes));
+
+      setDashboardFlash("Inclusão de idoso feita com sucesso.", "success");
 
       navigate("/dashboard");
     } catch (error) {

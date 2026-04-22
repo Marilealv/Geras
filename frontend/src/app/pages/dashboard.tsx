@@ -5,8 +5,11 @@ import logoGeras from "../../imports/geras.png";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Footer } from "../components/footer";
+import { FlashToast } from "../components/ui/flash-toast";
 import { getApiUrl } from "../config/api";
 import { clearAuthSession, getAuthHeaders, hydrateAuthSessionFromToken, logoutFromServer } from "../lib/auth";
+import { consumeDashboardFlash } from "../lib/dashboard-flash";
+import { useFlashMessage } from "../lib/use-flash-message";
 import { DashboardContent } from "./dashboard/content";
 
 interface Idoso {
@@ -60,6 +63,7 @@ export function DashboardPage() {
   const [editedInstituicao, setEditedInstituicao] = useState<Instituicao | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [vinculosPendentes, setVinculosPendentes] = useState<VinculoPendenteItem[]>([]);
+  const { flashMessage, isFlashVisible, showFlash, dismissFlash } = useFlashMessage();
 
   const calculateAge = (birthDate: string): number => {
     if (!birthDate) return 0;
@@ -193,6 +197,19 @@ export function DashboardPage() {
     loadDashboardData();
   }, [navigate]);
 
+  useEffect(() => {
+    if (isLoading) {
+      return;
+    }
+
+    const parsed = consumeDashboardFlash();
+    if (!parsed?.message) {
+      return;
+    }
+
+    showFlash(parsed.message, parsed.type);
+  }, [isLoading, showFlash]);
+
   const handleLogout = async () => {
     await logoutFromServer();
     navigate("/");
@@ -204,8 +221,10 @@ export function DashboardPage() {
 
   const handleSaveInstituicao = async () => {
     if (editedInstituicao) {
+      let savedByApi = true;
+
       try {
-        await fetch(getApiUrl("/api/instituicoes/me"), {
+        const response = await fetch(getApiUrl("/api/instituicoes/me"), {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
@@ -222,14 +241,25 @@ export function DashboardPage() {
             descricao: editedInstituicao.descricao,
           }),
         });
+
+        if (!response.ok) {
+          savedByApi = false;
+        }
       } catch {
         // em caso de falha de rede, persiste localmente
+        savedByApi = false;
       }
 
       localStorage.setItem("instituicao", JSON.stringify(editedInstituicao));
       setInstituicao(editedInstituicao);
       setIsEditingInstituicao(false);
       setShowSuccessModal(true);
+      showFlash(
+        savedByApi
+          ? "Dados da instituição atualizados com sucesso."
+          : "Dados atualizados localmente. Quando a conexão voltar, tente salvar novamente.",
+        savedByApi ? "success" : "error"
+      );
     }
   };
 
@@ -248,7 +278,7 @@ export function DashboardPage() {
       if (!motivoRejeicao) return;
     }
 
-    await fetch(getApiUrl(`/api/instituicoes/${instituicao.id}/vinculos/${vinculoId}`), {
+    const response = await fetch(getApiUrl(`/api/instituicoes/${instituicao.id}/vinculos/${vinculoId}`), {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
@@ -257,8 +287,25 @@ export function DashboardPage() {
       body: JSON.stringify({ action, motivoRejeicao }),
     });
 
+    if (!response.ok) {
+      let message = "Nao foi possivel atualizar o vinculo.";
+      try {
+        const payload = await response.json();
+        message = payload?.message || message;
+      } catch {
+        // Resposta sem corpo JSON
+      }
+      showFlash(message, "error");
+      return;
+    }
+
     setVinculosPendentes((prev: VinculoPendenteItem[]) =>
       prev.filter((v: VinculoPendenteItem) => v.id !== vinculoId)
+    );
+
+    showFlash(
+      action === "aprovar" ? "Vínculo aprovado com sucesso." : "Vínculo recusado com sucesso.",
+      "success"
     );
   };
 
@@ -355,6 +402,8 @@ export function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-teal-50 flex flex-col">
+      <FlashToast flashMessage={flashMessage} isVisible={isFlashVisible} onClose={dismissFlash} />
+
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-teal-100 sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">

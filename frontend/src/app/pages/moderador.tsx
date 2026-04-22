@@ -20,8 +20,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Badge } from "../components/ui/badge";
 import { Input } from "../components/ui/input";
 import { Checkbox } from "../components/ui/checkbox";
+import { FlashToast } from "../components/ui/flash-toast";
 import { getApiUrl } from "../config/api";
 import { clearAuthSession, getAuthHeaders, hydrateAuthSessionFromToken, logoutFromServer } from "../lib/auth";
+import { useFlashMessage } from "../lib/use-flash-message";
 import { ModeradorModals } from "./moderador/modals";
 
 interface Instituicao {
@@ -113,6 +115,7 @@ export function ModeradorPage() {
     desativada: true,
     recusada: true,
   });
+  const { flashMessage, isFlashVisible, showFlash, dismissFlash } = useFlashMessage();
 
   const loadInstituicoes = async () => {
     const response = await fetch(getApiUrl("/api/moderador/instituicoes"), {
@@ -217,9 +220,11 @@ export function ModeradorPage() {
 
       setUserActionFeedbackType("success");
       setUserActionFeedback("Atualizado com sucesso.");
+      showFlash("Ação de usuário executada com sucesso.", "success");
     } catch (error: any) {
       setUserActionFeedbackType("error");
       setUserActionFeedback(error?.message || "Erro ao executar acao de usuario.");
+      showFlash(error?.message || "Erro ao executar acao de usuario.", "error");
     } finally {
       setIsUpdatingUser(false);
       setUpdatingUserId(null);
@@ -337,9 +342,11 @@ export function ModeradorPage() {
       await loadUserVinculos(selectedUsuario.id);
       setVinculoNoticeType("success");
       setVinculoNotice("Vínculo atualizado com sucesso.");
+      showFlash("Vínculo de usuário atualizado com sucesso.", "success");
     } catch (error: any) {
       setVinculoNoticeType("error");
       setVinculoNotice(error?.message || "Erro ao atualizar vinculo do usuario.");
+      showFlash(error?.message || "Erro ao atualizar vinculo do usuario.", "error");
     } finally {
       setIsUpdatingVinculo(false);
     }
@@ -419,9 +426,11 @@ export function ModeradorPage() {
       await loadUserVinculos(selectedUsuario.id);
       setVinculoNoticeType("success");
       setVinculoNotice("Usuário vinculado com sucesso.");
+      showFlash("Usuário vinculado à instituição com sucesso.", "success");
     } catch (error: any) {
       setVinculoNoticeType("error");
       setVinculoNotice(error?.message || "Erro ao vincular usuario a instituicao.");
+      showFlash(error?.message || "Erro ao vincular usuario a instituicao.", "error");
     } finally {
       setIsVinculandoInstituicao(false);
     }
@@ -643,8 +652,10 @@ export function ModeradorPage() {
         setShowActionModal(false);
         setSelectedInstituicao(null);
         setMotivoRecusa("");
+        showFlash("Ação de moderação aplicada com sucesso.", "success");
       } catch (error: any) {
         setErrorMessage(error?.message || "Erro ao executar acao de moderacao.");
+        showFlash(error?.message || "Erro ao executar acao de moderacao.", "error");
       } finally {
         setIsSubmittingAction(false);
       }
@@ -655,6 +666,8 @@ export function ModeradorPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-teal-50">
+      <FlashToast flashMessage={flashMessage} isVisible={isFlashVisible} onClose={dismissFlash} />
+
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-teal-100 sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
