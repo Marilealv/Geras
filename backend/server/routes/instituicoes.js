@@ -9,12 +9,47 @@ export function registerInstituicoesRoutes({
   mapModeradorActionToDbStatus,
   APPROVED_INSTITUICAO_STATUS,
 }) {
+  const sanitizeCnpj = (value) => String(value || "").replace(/\D/g, "").slice(0, 14);
+
+  const formatCnpj = (value) => {
+    const digits = sanitizeCnpj(value);
+
+    if (digits.length !== 14) {
+      return digits;
+    }
+
+    return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12)}`;
+  };
+
+  const isValidCnpj = (value) => {
+    const cnpj = sanitizeCnpj(value);
+
+    if (cnpj.length !== 14 || /^(\d)\1+$/.test(cnpj)) {
+      return false;
+    }
+
+    const calculateDigit = (base, factors) => {
+      const total = base.split("").reduce((acc, num, index) => acc + Number(num) * factors[index], 0);
+      const mod = total % 11;
+      return mod < 2 ? 0 : 11 - mod;
+    };
+
+    const firstDigit = calculateDigit(cnpj.slice(0, 12), [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
+    const secondDigit = calculateDigit(cnpj.slice(0, 13), [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
+
+    return cnpj.endsWith(`${firstDigit}${secondDigit}`);
+  };
+
   app.post("/api/instituicoes", authMiddleware, async (req, res) => {
     const { nomeInstituicao, cnpj, endereco, cidade, estado, cep, telefone, descricao, imagemId } =
       req.body ?? {};
 
     if (!nomeInstituicao || !cnpj || !endereco || !cidade || !estado || !cep || !telefone) {
       return res.status(400).json({ message: "Dados obrigatorios da instituicao nao informados." });
+    }
+
+    if (!isValidCnpj(cnpj)) {
+      return res.status(400).json({ message: "CNPJ invalido." });
     }
 
     try {
@@ -35,7 +70,18 @@ export function registerInstituicoesRoutes({
          (usuario_id, nome, cnpj, endereco, cidade, estado, cep, telefone, descricao, imagem_id, status)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pendente')
          RETURNING id, usuario_id, nome, cnpj, endereco, cidade, estado, cep, telefone, descricao, imagem_id, status`,
-        [req.user.id, nomeInstituicao, cnpj, endereco, cidade, estado, cep, telefone, descricao ?? "", imagemId ?? null]
+        [
+          req.user.id,
+          nomeInstituicao,
+          formatCnpj(cnpj),
+          endereco,
+          cidade,
+          estado,
+          cep,
+          telefone,
+          descricao ?? "",
+          imagemId ?? null,
+        ]
       );
 
       const instituicao = result.rows[0];

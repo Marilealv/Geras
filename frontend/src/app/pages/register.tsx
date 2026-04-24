@@ -5,7 +5,6 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { getApiUrl } from "../config/api";
-import { setAuthSession } from "../lib/auth";
 
 interface InstituicaoBusca {
   id: number;
@@ -19,6 +18,7 @@ export function RegisterPage() {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [jaCadastrada, setJaCadastrada] = useState(false);
   const [buscaInstituicao, setBuscaInstituicao] = useState("");
   const [resultadosBusca, setResultadosBusca] = useState<InstituicaoBusca[]>([]);
@@ -31,19 +31,38 @@ export function RegisterPage() {
     confirmarSenha: "",
   });
 
+  const formatPhone = (value: string) => {
+    const digits = value.replace(/\D/g, "").slice(0, 11);
+
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  };
+
+  const sanitizePhone = (value: string) => value.replace(/\D/g, "");
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value,
+      [e.target.name]: e.target.name === "telefone" ? formatPhone(e.target.value) : e.target.value,
     });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
+    setSuccessMessage("");
 
     if (formData.senha !== formData.confirmarSenha) {
       setErrorMessage("As senhas nao coincidem.");
+      return;
+    }
+
+    const telefoneDigits = sanitizePhone(formData.telefone);
+    if (telefoneDigits.length !== 10 && telefoneDigits.length !== 11) {
+      setErrorMessage("Informe um telefone valido com DDD.");
       return;
     }
 
@@ -77,9 +96,13 @@ export function RegisterPage() {
         return;
       }
 
-      setAuthSession(data.token, data.user);
-
-      navigate(jaCadastrada ? "/dashboard" : "/cadastrar-instituicao");
+      setSuccessMessage(data.message || "Cadastro concluido. Verifique seu e-mail para entrar.");
+      navigate("/login", {
+        state: {
+          fromRegister: true,
+          email: formData.email,
+        },
+      });
     } catch {
       setErrorMessage("Erro de conexao com o servidor.");
     } finally {
@@ -276,6 +299,12 @@ export function RegisterPage() {
             {errorMessage && (
               <p className="text-sm text-red-600" role="alert">
                 {errorMessage}
+              </p>
+            )}
+
+            {successMessage && (
+              <p className="text-sm text-green-700" role="status">
+                {successMessage}
               </p>
             )}
 

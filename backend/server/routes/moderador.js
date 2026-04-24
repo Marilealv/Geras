@@ -142,7 +142,9 @@ export function registerModeradorRoutes({
                 u.nome_responsavel, u.email, u.telefone
          FROM instituicao_usuarios iu
          INNER JOIN usuarios u ON u.id = iu.usuario_id
-         WHERE iu.instituicao_id = $1 AND iu.status = 'pendente'
+         WHERE iu.instituicao_id = $1
+           AND iu.status = 'pendente'
+           AND u.email_verificado = TRUE
          ORDER BY iu.solicitado_em ASC`,
         [id]
       );
@@ -203,10 +205,12 @@ export function registerModeradorRoutes({
     try {
       const result = await pool.query(
         `SELECT u.id, u.nome_responsavel, u.email, u.telefone, u.tipo_usuario, u.bloqueado, u.precisa_trocar_senha,
+          u.email_verificado,
                 COUNT(iu.id) FILTER (WHERE iu.status = 'aprovado') AS instituicoes_aprovadas,
                 COUNT(iu.id) FILTER (WHERE iu.status = 'pendente') AS vinculos_pendentes
          FROM usuarios u
          LEFT JOIN instituicao_usuarios iu ON iu.usuario_id = u.id
+         WHERE u.email_verificado = TRUE
          GROUP BY u.id
          ORDER BY u.criado_em DESC`
       );

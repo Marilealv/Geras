@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import logoGeras from "../../imports/geras.png";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -8,17 +8,27 @@ import { getApiUrl } from "../config/api";
 import { setAuthSession } from "../lib/auth";
 
 export function LoginPage() {
+  const location = useLocation();
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(String((location.state as { email?: string } | null)?.email || ""));
   const [senha, setSenha] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isResendingVerification, setIsResendingVerification] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [infoMessage, setInfoMessage] = useState(
+    (location.state as { fromRegister?: boolean } | null)?.fromRegister
+      ? "Cadastro realizado. Verifique seu e-mail para liberar o login."
+      : ""
+  );
+  const [emailNaoVerificado, setEmailNaoVerificado] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
 
     setIsLoading(true);
     setErrorMessage("");
+    setInfoMessage("");
+    setEmailNaoVerificado(false);
 
     try {
       const response = await fetch(getApiUrl("/api/auth/login"), {
@@ -32,6 +42,9 @@ export function LoginPage() {
       const data = await response.json();
 
       if (!response.ok) {
+        if (data.code === "EMAIL_NAO_VERIFICADO") {
+          setEmailNaoVerificado(true);
+        }
         setErrorMessage(data.message || "Nao foi possivel fazer login.");
         return;
       }
@@ -53,6 +66,40 @@ export function LoginPage() {
       setErrorMessage("Erro de conexao com o servidor.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleResendVerificationEmail = async () => {
+    if (!email.trim()) {
+      setErrorMessage("Informe seu e-mail para reenviar a verificacao.");
+      return;
+    }
+
+    setIsResendingVerification(true);
+    setErrorMessage("");
+    setInfoMessage("");
+
+    try {
+      const response = await fetch(getApiUrl("/api/auth/email-verification/resend"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setErrorMessage(data.message || "Nao foi possivel reenviar o e-mail de verificacao.");
+        return;
+      }
+
+      setInfoMessage(data.message || "E-mail de verificacao reenviado.");
+    } catch {
+      setErrorMessage("Erro de conexao com o servidor.");
+    } finally {
+      setIsResendingVerification(false);
     }
   };
 
@@ -107,9 +154,27 @@ export function LoginPage() {
               </p>
             )}
 
+            {infoMessage && (
+              <p className="text-sm text-green-700" role="status">
+                {infoMessage}
+              </p>
+            )}
+
+            {emailNaoVerificado && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleResendVerificationEmail}
+                disabled={isResendingVerification}
+                className="w-full border-teal-300 text-teal-900"
+              >
+                {isResendingVerification ? "Reenviando..." : "Reenviar e-mail de verificacao"}
+              </Button>
+            )}
+
             <div className="flex items-center justify-between text-sm">
-              <Link to="#" className="text-teal-700 hover:text-teal-900">
-                Não possui conta?
+              <Link to="/esqueci-senha" className="text-teal-700 hover:text-teal-900 underline">
+                Esqueci minha senha
               </Link>
               <Link to="/registro" className="text-teal-700 hover:text-teal-900 underline">
                 Cadastre-se aqui!

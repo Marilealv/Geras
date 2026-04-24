@@ -9,6 +9,9 @@ import { PerfilIdosoPage } from "./pages/perfil-idoso";
 import { InstituicoesPage } from "./pages/instituicoes";
 import { ModeradorPage } from "./pages/moderador";
 import { TrocarSenhaPage } from "./pages/trocar-senha";
+import { EsqueciSenhaPage } from "./pages/esqueci-senha";
+import { RedefinirSenhaPage } from "./pages/redefinir-senha";
+import { VerificarEmailPage } from "./pages/verificar-email";
 
 export const router = createBrowserRouter([
   {
@@ -18,6 +21,18 @@ export const router = createBrowserRouter([
   {
     path: "/login",
     Component: LoginPage,
+  },
+  {
+    path: "/esqueci-senha",
+    Component: EsqueciSenhaPage,
+  },
+  {
+    path: "/redefinir-senha",
+    Component: RedefinirSenhaPage,
+  },
+  {
+    path: "/verificar-email",
+    Component: VerificarEmailPage,
   },
   {
     path: "/registro",

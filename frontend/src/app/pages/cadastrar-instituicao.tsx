@@ -59,6 +59,63 @@ export function CadastrarInstituicaoPage() {
     return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
   };
 
+  const formatCnpj = (value: string) => {
+    const digits = value.replace(/\D/g, "").slice(0, 14);
+
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 5) return `${digits.slice(0, 2)}.${digits.slice(2)}`;
+    if (digits.length <= 8) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5)}`;
+    if (digits.length <= 12) {
+      return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8)}`;
+    }
+
+    return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12)}`;
+  };
+
+  const sanitizeCnpj = (value: string) => value.replace(/\D/g, "").slice(0, 14);
+
+  const isValidCnpj = (value: string) => {
+    const cnpj = sanitizeCnpj(value);
+
+    if (cnpj.length !== 14 || /^(\d)\1+$/.test(cnpj)) {
+      return false;
+    }
+
+    const calculateDigit = (base: string, factors: number[]) => {
+      const total = base
+        .split("")
+        .reduce((acc, num, index) => acc + Number(num) * factors[index], 0);
+      const mod = total % 11;
+      return mod < 2 ? 0 : 11 - mod;
+    };
+
+    const firstDigit = calculateDigit(cnpj.slice(0, 12), [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
+    const secondDigit = calculateDigit(cnpj.slice(0, 13), [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
+
+    return cnpj.endsWith(`${firstDigit}${secondDigit}`);
+  };
+
+  const checkCnpjIsActive = async (cnpj: string) => {
+    try {
+      const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`);
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const payload = await response.json();
+      const situacao = String(payload?.descricao_situacao_cadastral || "").toUpperCase();
+
+      if (!situacao) {
+        return null;
+      }
+
+      return situacao.includes("ATIVA");
+    } catch {
+      return null;
+    }
+  };
+
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
@@ -66,7 +123,7 @@ export function CadastrarInstituicaoPage() {
 
     setFormData({
       ...formData,
-      [name]: name === "telefone" ? formatPhone(value) : value,
+      [name]: name === "telefone" ? formatPhone(value) : name === "cnpj" ? formatCnpj(value) : value,
     });
   };
 
@@ -107,6 +164,19 @@ export function CadastrarInstituicaoPage() {
 
       let imagemId: number | null = null;
       let imagemUrlLocal: string | null = null;
+      const cnpjDigits = sanitizeCnpj(formData.cnpj);
+
+      if (!isValidCnpj(cnpjDigits)) {
+        setErrorMessage("CNPJ invalido. Confira os digitos informados.");
+        return;
+      }
+
+      const cnpjAtivo = await checkCnpjIsActive(cnpjDigits);
+
+      if (cnpjAtivo === false) {
+        setErrorMessage("O CNPJ informado nao esta com situacao ativa na Receita.");
+        return;
+      }
 
       // Envia a imagem para Cloudinary na pasta home/geras/instituicoes
       if (imagem) {
@@ -123,6 +193,7 @@ export function CadastrarInstituicaoPage() {
         },
         body: JSON.stringify({
           ...formData,
+          cnpj: formatCnpj(cnpjDigits),
           imagemId,
         }),
       });
