@@ -39,13 +39,14 @@ interface Necessidade {
   tipo: "urgente" | "desejado";
   concluida_em?: string | null;
 }
-  const { flashMessage, isFlashVisible, showFlash, dismissFlash } = useFlashMessage();
+
 interface Idoso {
   id: number;
   nome: string;
   idade: number;
   dataAniversario?: string;
   foto?: string;
+  historia?: string;
   hobbies?: string;
   musicaFavorita?: string;
   comidaFavorita?: string;
@@ -59,51 +60,55 @@ interface InstituicaoPerfil {
   cidade?: string;
   estado?: string;
   cep?: string;
+  telefone?: string;
 }
 
 interface AuthUser {
   id: number;
-      showFlash("Informe o item da necessidade.", "error");
+  tipo: "moderador" | "donatario";
 }
 
 export function PerfilIdosoPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const idosoId = Number(id);
   const [idoso, setIdoso] = useState<Idoso | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
-      showFlash(isEditingNecessidade ? "Necessidade atualizada." : "Necessidade adicionada.", "success");
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-      showFlash(error?.message || "Erro ao salvar necessidade.", "error");
   const [editedIdoso, setEditedIdoso] = useState<Idoso | null>(null);
+  const [instituicao, setInstituicao] = useState<InstituicaoPerfil | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [necessidadeItem, setNecessidadeItem] = useState("");
   const [necessidadeTipo, setNecessidadeTipo] = useState<"urgente" | "desejado">("urgente");
   const [editingNecessidadeId, setEditingNecessidadeId] = useState<number | null>(null);
   const [isSavingNecessidade, setIsSavingNecessidade] = useState(false);
   const { flashMessage, isFlashVisible, showFlash, dismissFlash } = useFlashMessage();
 
+  useEffect(() => {
     hydrateAuthSessionFromToken();
 
-      showFlash("Necessidade concluída.", "success");
+    const userData = localStorage.getItem("user");
     if (!userData) {
       return;
     }
 
-      showFlash(error?.message || "Erro ao concluir necessidade.", "error");
+    try {
       const parsedUser = JSON.parse(userData);
       if (parsedUser?.id && parsedUser?.tipo) {
         setAuthUser({
           id: Number(parsedUser.id),
           tipo: parsedUser.tipo,
         });
+      } else {
+        setAuthUser(null);
       }
+    } catch {
       setAuthUser(null);
     }
   }, []);
 
-      showFlash("Necessidade removida.", "success");
   const calculateAge = (birthDate: string): number => {
-      showFlash(error?.message || "Erro ao remover necessidade.", "error");
     const today = new Date();
     const birth = new Date(birthDate);
     let age = today.getFullYear() - birth.getFullYear();
@@ -111,7 +116,6 @@ export function PerfilIdosoPage() {
     if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
       age--;
     }
-      <FlashToast flashMessage={flashMessage} isVisible={isFlashVisible} onClose={dismissFlash} />
     return age;
   };
 
