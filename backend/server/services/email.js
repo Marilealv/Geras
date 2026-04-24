@@ -5,13 +5,57 @@ const MAIL_PORT = Number(process.env.SMTP_PORT || 587);
 const MAIL_SECURE = String(process.env.SMTP_SECURE || "false").toLowerCase() === "true";
 const MAIL_USER = process.env.SMTP_USER || "";
 const MAIL_PASS = process.env.SMTP_PASS || "";
-const MAIL_FROM = process.env.SMTP_FROM || process.env.SMTP_USER || "";
-const FRONTEND_BASE_URL = process.env.FRONTEND_BASE_URL || "http://localhost:5173";
+const MAIL_FROM = process.env.SMTP_FROM || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || "";
+const MAIL_FROM_NAME = process.env.SMTP_FROM_NAME || "Geras";
+
+function normalizeBaseUrl(value) {
+  const raw = String(value || "").trim();
+
+  if (!raw) {
+    return "http://localhost:5173";
+  }
+
+  if (/^https?:\/\//i.test(raw)) {
+    return raw;
+  }
+
+  return `https://${raw}`;
+}
+
+const FRONTEND_BASE_URL = normalizeBaseUrl(process.env.FRONTEND_BASE_URL || "http://localhost:5173");
 
 let transporter = null;
 
+function extractEmailAddress(value) {
+  const raw = String(value || "").trim();
+
+  if (!raw) {
+    return "";
+  }
+
+  const bracketMatch = raw.match(/<([^>]+)>/);
+  const candidate = (bracketMatch?.[1] || raw).trim();
+
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidate) ? candidate : "";
+}
+
+function resolveFromAddress() {
+  const address = extractEmailAddress(MAIL_FROM);
+
+  if (!address) {
+    return null;
+  }
+
+  return {
+    name: MAIL_FROM_NAME,
+    address,
+  };
+}
+
+const FROM_ADDRESS = resolveFromAddress();
+
 function getTransporter() {
-  if (!MAIL_USER || !MAIL_PASS || !MAIL_FROM) {
+  if (!MAIL_USER || !MAIL_PASS || !FROM_ADDRESS) {
     return null;
   }
 
@@ -38,11 +82,13 @@ async function sendEmail({ to, subject, html, text }) {
   const transport = getTransporter();
 
   if (!transport) {
-    throw new Error("Servico de e-mail nao configurado. Defina SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS e SMTP_FROM.");
+    throw new Error(
+      "Servico de e-mail nao configurado. Defina SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS e SMTP_FROM com um e-mail valido (ex: Geras <noreply@seudominio.com>)."
+    );
   }
 
   await transport.sendMail({
-    from: MAIL_FROM,
+    from: FROM_ADDRESS,
     to,
     subject,
     text,
