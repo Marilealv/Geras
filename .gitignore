@@ -6,13 +6,3 @@ backend/.env
 frontend/.env
 
 frontend/dist
-
-# Playwright
-/test-results/
-/playwright-report/
-/blob-report/
-/playwright/.cache/
-/playwright/.auth/
-playwright.config.ts
-.github/workflows/playwright.yml
-tests/example.spec.ts
