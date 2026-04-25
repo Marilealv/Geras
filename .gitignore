@@ -13,3 +13,4 @@ frontend/dist
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+playwright.config.ts
