@@ -14,3 +14,4 @@ frontend/dist
 /playwright/.cache/
 /playwright/.auth/
 playwright.config.ts
+.github/workflows/playwright.yml
