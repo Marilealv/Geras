@@ -174,11 +174,11 @@ export function InstituicaoDetalhesPage() {
             <CardContent className="pt-6">
               {/* Imagem da Instituição */}
               {instituicao.imagem_url && (
-                <div className="mb-8">
+                <div className="mb-6">
                   <img
                     src={instituicao.imagem_url}
                     alt={instituicao.nomeInstituicao}
-                    className="w-full max-h-96 object-cover rounded-lg border-2 border-teal-100"
+                    className="w-32 h-32 rounded-full object-cover border-4 border-teal-100 shadow-lg"
                   />
                 </div>
               )}
