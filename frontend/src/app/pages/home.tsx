@@ -97,12 +97,6 @@ export function HomePage() {
                   Cadastrar Instituição
                 </Button>
               </Link>
-              <Button
-                variant="outline"
-                className="border-teal-700 text-teal-900 hover:bg-teal-50 px-8 py-6 text-lg"
-              >
-                Saiba Mais
-              </Button>
             </div>
           </div>
           <div className="relative">
@@ -125,16 +119,27 @@ export function HomePage() {
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto text-center">
             <h2 className="text-3xl md:text-4xl text-teal-900 mb-6">Sobre Nós</h2>
-            <p className="text-lg text-teal-800 mb-8">
-              O Geras é uma plataforma web que conecta doadores e idosos, oferecendo um
-              espaço para que necessidades reais sejam reconhecidas e atendidas de forma
-              mais humana e personalizada.
+            <p className="text-lg text-teal-800 mb-4">
+              O Geras é uma plataforma web criada para aproximar doadores e idosos,
+              promovendo conexões mais humanas e significativas. Nosso objetivo é ir além da
+              doação tradicional, oferecendo um espaço onde histórias, necessidades e desejos
+              individuais possam ser reconhecidos e atendidos com cuidado e empatia.
             </p>
+
+            <p className="text-lg text-teal-800 mb-4">
+              Acreditamos que cada idoso possui sua própria trajetória, seus gostos e suas
+              particularidades e é justamente isso que queremos valorizar. No Geras, não se
+              trata apenas de doar, mas de entender e acolher.
+            </p>
+
+            <p className="text-lg text-teal-800 mb-4">
+              Seja por meio de um objeto especial, um item essencial ou até mesmo um gesto
+              simples, como uma conversa, uma visita ou um abraço, buscamos transformar cada
+              ação em um momento de conexão genuína.
+            </p>
+
             <p className="text-lg text-teal-800">
-              Diferentemente de iniciativas tradicionais de doação, a proposta do Geras é
-              pôr em foco os gostos e particularidades de cada idoso. Seja um objeto
-              especial, um produto de necessidade, ou até mesmo um gesto, como: uma
-              companhia, uma conversa ou um abraço.
+              Porque, no fim, doar também é sobre se aproximar.
             </p>
           </div>
         </div>
