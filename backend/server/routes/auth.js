@@ -446,10 +446,12 @@ export function registerAuthRoutes({
         return res.status(503).json({ message: "Servico de e-mail indisponivel no momento." });
       }
 
-      await sendResetPasswordMessage({
+      void sendResetPasswordMessage({
         to: user.email,
         nome: user.nome_responsavel,
         resetUrl: buildResetPasswordUrl(resetToken.token),
+      }).catch((emailError) => {
+        console.error("Erro ao enviar e-mail de redefinicao:", emailError);
       });
 
       return res.status(200).json({ message: "Se o e-mail estiver cadastrado, voce recebera as instrucoes." });
