@@ -2,12 +2,17 @@ import nodemailer from "nodemailer";
 
 const MAIL_HOST = process.env.SMTP_HOST || "smtp.mailersend.net";
 const MAIL_PORT = Number(process.env.SMTP_PORT || 587);
-const MAIL_SECURE_ENV = process.env.SMTP_SECURE;
-const MAIL_SECURE =
-  MAIL_SECURE_ENV === undefined
-    ? MAIL_PORT === 465
-    : String(MAIL_SECURE_ENV).toLowerCase() === "true";
-const MAIL_USE_STARTTLS = MAIL_PORT === 587 && !MAIL_SECURE;
+const SMTP_FALLBACK_PORTS = [587, 2525, 465];
+const MAIL_PORTS = Array.from(
+  new Set([
+    MAIL_PORT,
+    ...String(process.env.SMTP_PORTS || "")
+      .split(",")
+      .map((item) => Number(item.trim()))
+      .filter((value) => Number.isFinite(value) && value > 0),
+    ...SMTP_FALLBACK_PORTS,
+  ])
+);
 const MAIL_USER = process.env.SMTP_USER || "";
 const MAIL_PASS = process.env.SMTP_PASS || "";
 const MAIL_FROM = process.env.SMTP_FROM || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || "";
@@ -32,8 +37,6 @@ function normalizeBaseUrl(value) {
 }
 
 const FRONTEND_BASE_URL = normalizeBaseUrl(process.env.FRONTEND_BASE_URL || "http://localhost:5173");
-
-let transporter = null;
 
 function withTimeout(promise, timeoutMs, label) {
   let timeoutId;
@@ -79,63 +82,72 @@ function resolveFromAddress() {
 
 const FROM_ADDRESS = resolveFromAddress();
 
-function getTransporter() {
-  if (!MAIL_USER || !MAIL_PASS || !FROM_ADDRESS) {
-    return null;
-  }
+function createTransporterForPort(port) {
+  const secure = port === 465;
+  const requireTLS = !secure;
 
-  if (!transporter) {
-    console.log("Configurando transporte SMTP:", {
-      host: MAIL_HOST,
-      port: MAIL_PORT,
-      secure: MAIL_SECURE,
-      requireTLS: MAIL_USE_STARTTLS,
-      userConfigured: Boolean(MAIL_USER),
-      fromConfigured: Boolean(FROM_ADDRESS),
-    });
+  console.log("Tentando transporte SMTP:", {
+    host: MAIL_HOST,
+    port,
+    secure,
+    requireTLS,
+    userConfigured: Boolean(MAIL_USER),
+    fromConfigured: Boolean(FROM_ADDRESS),
+  });
 
-    transporter = nodemailer.createTransport({
-      host: MAIL_HOST,
-      port: MAIL_PORT,
-      secure: MAIL_SECURE,
-      requireTLS: MAIL_USE_STARTTLS,
-      connectionTimeout: MAIL_CONNECTION_TIMEOUT_MS,
-      greetingTimeout: MAIL_GREETING_TIMEOUT_MS,
-      socketTimeout: MAIL_SOCKET_TIMEOUT_MS,
-      auth: {
-        user: MAIL_USER,
-        pass: MAIL_PASS,
-      },
-    });
-  }
-
-  return transporter;
+  return nodemailer.createTransport({
+    host: MAIL_HOST,
+    port,
+    secure,
+    requireTLS,
+    connectionTimeout: MAIL_CONNECTION_TIMEOUT_MS,
+    greetingTimeout: MAIL_GREETING_TIMEOUT_MS,
+    socketTimeout: MAIL_SOCKET_TIMEOUT_MS,
+    auth: {
+      user: MAIL_USER,
+      pass: MAIL_PASS,
+    },
+  });
 }
 
 export function isEmailServiceConfigured() {
-  return Boolean(getTransporter());
+  return Boolean(MAIL_USER && MAIL_PASS && FROM_ADDRESS);
 }
 
 async function sendEmail({ to, subject, html, text }) {
-  const transport = getTransporter();
-
-  if (!transport) {
+  if (!isEmailServiceConfigured()) {
     throw new Error(
       "Servico de e-mail nao configurado. Defina SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS e SMTP_FROM com um e-mail valido (ex: Geras <noreply@seudominio.com>)."
     );
   }
 
-  await withTimeout(
-    transport.sendMail({
-      from: FROM_ADDRESS,
-      to,
-      subject,
-      text,
-      html,
-    }),
-    MAIL_SEND_TIMEOUT_MS,
-    "Envio de e-mail"
-  );
+  let lastError = null;
+
+  for (const port of MAIL_PORTS) {
+    const transport = createTransporterForPort(port);
+
+    try {
+      await withTimeout(
+        transport.sendMail({
+          from: FROM_ADDRESS,
+          to,
+          subject,
+          text,
+          html,
+        }),
+        MAIL_SEND_TIMEOUT_MS,
+        `Envio de e-mail (porta ${port})`
+      );
+
+      console.log("E-mail enviado com sucesso via SMTP:", { host: MAIL_HOST, port });
+      return;
+    } catch (error) {
+      lastError = error;
+      console.error("Falha no envio SMTP:", { host: MAIL_HOST, port, error: String(error?.message || error) });
+    }
+  }
+
+  throw lastError || new Error("Nao foi possivel enviar e-mail em nenhuma porta SMTP.");
 }
 
 function buildUrl(pathname, token) {
