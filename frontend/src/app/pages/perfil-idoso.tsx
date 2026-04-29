@@ -505,7 +505,7 @@ export function PerfilIdosoPage() {
             </Link>
           </div>
           <div className="flex items-center gap-2 sm:gap-4 transition-all duration-300">
-            {authUser && (
+            {authUser ? (
               <Link to={quickAccessPath}>
                 <Button
                   variant="outline"
@@ -515,7 +515,14 @@ export function PerfilIdosoPage() {
                   <span className="hidden sm:inline">{quickAccessLabel}</span>
                 </Button>
               </Link>
+            ) : (
+              <Link to="/login">
+                <Button className="bg-[#F7C672] hover:bg-[#f5b85a] text-teal-900 transition-all duration-300">
+                  Entrar
+                </Button>
+              </Link>
             )}
+
             <Link to={backPath}>
               <Button
                 variant="outline"
