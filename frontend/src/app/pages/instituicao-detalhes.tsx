@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useParams } from "react-router";
-import { MapPin, Phone, Users, Heart, ArrowLeft } from "lucide-react";
+import { MapPin, Phone, Users, Heart, ArrowLeft, Building2 } from "lucide-react";
 import logoGeras from "../../imports/geras.png";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
@@ -117,32 +117,27 @@ export function InstituicaoDetalhesPage() {
               <img src={logoGeras} alt="Geras" className="h-12" />
             </Link>
           </div>
-          <nav className="hidden md:flex items-center gap-6">
-            <Link to="/#inicio" className="text-teal-900 hover:text-teal-700 transition">
-              Início
+          <div className="flex items-center gap-2 sm:gap-4 transition-all duration-300">
+            <Link to="/instituicoes">
+              <Button
+                variant="outline"
+                className="border-teal-700 text-teal-900 hover:bg-teal-50 transition-all duration-300"
+              >
+                <ArrowLeft className="w-4 h-4 mr-0 sm:mr-2" />
+                <span className="hidden sm:inline">Voltar</span>
+              </Button>
             </Link>
-            <Link to="/#sobre" className="text-teal-900 hover:text-teal-700 transition">
-              Sobre
+            <Link to="/login">
+              <Button className="bg-[#F7C672] hover:bg-[#f5b85a] text-teal-900 transition-all duration-300">
+                Entrar
+              </Button>
             </Link>
-            <Link to="/instituicoes" className="text-teal-900 hover:text-teal-700 transition font-medium">
-              Instituições
-            </Link>
-          </nav>
-          <Link to="/login">
-            <Button className="bg-[#F7C672] hover:bg-[#f5b85a] text-teal-900">
-              Entrar
-            </Button>
-          </Link>
+          </div>
         </div>
       </header>
 
       {/* Content */}
       <div className="flex-grow container mx-auto px-4 py-12">
-        <Link to="/instituicoes" className="inline-flex items-center gap-2 text-teal-600 hover:text-teal-700 mb-6 transition">
-          <ArrowLeft className="w-5 h-5" />
-          Voltar para Instituições
-        </Link>
-
         {isLoading ? (
           <Card className="border-teal-200">
             <CardContent className="py-12 text-center">

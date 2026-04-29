@@ -504,12 +504,12 @@ export function PerfilIdosoPage() {
               <img src={logoGeras} alt="Geras" className="h-12" />
             </Link>
           </div>
-          <div className="flex items-center gap-2 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 transition-all duration-300">
             {authUser && (
               <Link to={quickAccessPath}>
                 <Button
                   variant="outline"
-                  className="border-teal-700 text-teal-900 hover:bg-teal-50"
+                  className="border-teal-700 text-teal-900 hover:bg-teal-50 transition-all duration-300"
                 >
                   <Building2 className="w-4 h-4 mr-0 sm:mr-2" />
                   <span className="hidden sm:inline">{quickAccessLabel}</span>
@@ -519,7 +519,7 @@ export function PerfilIdosoPage() {
             <Link to={backPath}>
               <Button
                 variant="outline"
-                className="border-teal-700 text-teal-900 hover:bg-teal-50"
+                className="border-teal-700 text-teal-900 hover:bg-teal-50 transition-all duration-300"
               >
                 <ArrowLeft className="w-4 h-4 mr-0 sm:mr-2" />
                 <span className="hidden sm:inline">Voltar</span>
