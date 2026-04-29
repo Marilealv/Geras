@@ -144,14 +144,14 @@ export function InstituicaoDetalhesPage() {
         </Link>
 
         {isLoading ? (
-          <Card className="border-teal-200 max-w-4xl mx-auto">
+          <Card className="border-teal-200">
             <CardContent className="py-12 text-center">
               <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-teal-600 border-t-transparent mb-4"></div>
               <p className="text-teal-700">Carregando instituição...</p>
             </CardContent>
           </Card>
         ) : error ? (
-          <Card className="border-teal-200 max-w-2xl mx-auto">
+          <Card className="border-teal-200">
             <CardContent className="py-12 text-center">
               <Heart className="w-16 h-16 mx-auto text-teal-300 mb-4" />
               <h2 className="text-2xl text-teal-900 mb-4">
@@ -165,118 +165,125 @@ export function InstituicaoDetalhesPage() {
             </CardContent>
           </Card>
         ) : instituicao ? (
-          <Card className="border-teal-200 shadow-lg max-w-4xl mx-auto">
+          <Card className="border-teal-200 shadow-lg">
             <CardHeader className="bg-gradient-to-r from-teal-50 to-rose-50">
               <CardTitle className="text-4xl text-teal-900">
                 {instituicao.nomeInstituicao}
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
-              {/* Imagem da Instituição */}
-              {instituicao.imagem_url && (
-                <div className="mb-6">
-                  <img
-                    src={instituicao.imagem_url}
-                    alt={instituicao.nomeInstituicao}
-                    className="w-32 h-32 rounded-full object-cover border-4 border-teal-100 shadow-lg"
-                  />
-                </div>
-              )}
-
-              {/* Informações Principais */}
-              <div className="grid md:grid-cols-2 gap-8 mb-8">
-                <div>
-                  <h3 className="text-xl font-medium text-teal-900 mb-4">
-                    Sobre a Instituição
-                  </h3>
-                  <p className="text-teal-800 mb-6 leading-relaxed">{instituicao.descricao}</p>
-                  <div className="text-sm text-teal-700 space-y-2">
-                    <p className="font-medium">CNPJ: <span className="font-normal">{instituicao.cnpj}</span></p>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="bg-teal-50 rounded-lg p-4">
-                    <div className="flex items-start gap-3">
-                      <MapPin className="w-5 h-5 text-teal-600 mt-1 flex-shrink-0" />
-                      <div>
-                        <h4 className="font-medium text-teal-900 mb-2">Endereço</h4>
-                        <p className="text-teal-700">{instituicao.endereco}</p>
-                        <p className="text-teal-700">
-                          {instituicao.cidade} - {instituicao.estado}
-                        </p>
-                        <p className="text-teal-700">CEP: {instituicao.cep}</p>
-                      </div>
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                {/* Sidebar - Imagem e Info Principal */}
+                <div className="lg:col-span-1">
+                  {instituicao.imagem_url && (
+                    <div className="mb-6">
+                      <img
+                        src={instituicao.imagem_url}
+                        alt={instituicao.nomeInstituicao}
+                        className="w-full rounded-lg object-cover border-2 border-teal-100 mb-4"
+                      />
                     </div>
-                  </div>
-
-                  <div className="bg-teal-50 rounded-lg p-4">
-                    <div className="flex items-start gap-3">
-                      <Phone className="w-5 h-5 text-teal-600 mt-1 flex-shrink-0" />
-                      <div>
-                        <h4 className="font-medium text-teal-900 mb-2">Contato</h4>
-                        <p className="text-teal-700">{instituicao.telefone}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Lista de Idosos */}
-              <div>
-                <div className="flex items-center gap-3 mb-8">
-                  <Users className="w-8 h-8 text-teal-600" />
-                  <h2 className="text-3xl text-teal-900">
-                    Nossos Idosos ({instituicao.idosos.length})
-                  </h2>
-                </div>
-
-                {instituicao.idosos.length === 0 ? (
-                  <Card className="border-teal-200">
-                    <CardContent className="py-12 text-center">
-                      <Users className="w-16 h-16 mx-auto text-teal-300 mb-4" />
-                      <p className="text-lg text-teal-700">
-                        Ainda não há idosos cadastrados nesta instituição
+                  )}
+                  
+                  <div className="bg-teal-50 rounded-lg p-4 space-y-3 sticky top-20">
+                    <div>
+                      <h4 className="font-medium text-teal-900 mb-2 text-sm">Contato</h4>
+                      <p className="text-teal-700 text-sm flex items-center gap-2">
+                        <Phone className="w-4 h-4" />
+                        {instituicao.telefone}
                       </p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {instituicao.idosos.map((idoso) => {
-                      const calculatedAge = calculateAge(idoso.dataAniversario);
-                      const displayedAge = calculatedAge ?? idoso.idade;
+                    </div>
+                    
+                    <div>
+                      <h4 className="font-medium text-teal-900 mb-2 text-sm">Localização</h4>
+                      <p className="text-teal-700 text-sm flex items-start gap-2">
+                        <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        <span>{instituicao.cidade} - {instituicao.estado}</span>
+                      </p>
+                    </div>
 
-                      return (
-                        <Link key={idoso.id} to={`/perfil-idoso/${idoso.id}`}>
-                          <Card className="border-teal-200 hover:shadow-xl transition-all cursor-pointer h-full">
-                            <CardContent className="p-6">
-                              <div className="flex flex-col items-center text-center">
-                                {idoso.foto ? (
-                                  <img
-                                    src={idoso.foto}
-                                    alt={idoso.nome}
-                                    className="w-24 h-24 rounded-full object-cover mb-4 border-4 border-teal-100"
-                                  />
-                                ) : (
-                                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-teal-100 to-rose-100 flex items-center justify-center mb-4 border-4 border-teal-100">
-                                    <Users className="w-12 h-12 text-teal-600" />
-                                  </div>
-                                )}
-                                <h3 className="text-xl text-teal-900 mb-1">{idoso.nome}</h3>
-                                <p className="text-teal-600 mb-3">{displayedAge} anos</p>
-                                {idoso.historia && (
-                                  <p className="text-sm text-teal-700 line-clamp-3">
-                                    {idoso.historia}
-                                  </p>
-                                )}
-                              </div>
-                            </CardContent>
-                          </Card>
-                        </Link>
-                      );
-                    })}
+                    <div>
+                      <h4 className="font-medium text-teal-900 mb-1 text-sm">CNPJ</h4>
+                      <p className="text-teal-700 text-xs">{instituicao.cnpj}</p>
+                    </div>
                   </div>
-                )}
+                </div>
+
+                {/* Main Content */}
+                <div className="lg:col-span-3">
+                  <div className="mb-8">
+                    <h3 className="text-xl font-medium text-teal-900 mb-3">Sobre a Instituição</h3>
+                    <p className="text-teal-800 leading-relaxed">{instituicao.descricao}</p>
+                  </div>
+
+                  <div className="bg-teal-50 rounded-lg p-4 mb-8">
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="text-teal-600 font-medium">Endereço</p>
+                        <p className="text-teal-800">{instituicao.endereco}</p>
+                        <p className="text-teal-800">{instituicao.cep}</p>
+                      </div>
+                      <div>
+                        <p className="text-teal-600 font-medium">Total de Idosos</p>
+                        <p className="text-2xl font-bold text-teal-700">{instituicao.idosos.length}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Lista de Idosos */}
+                  <div>
+                    <h2 className="text-2xl font-semibold text-teal-900 mb-4">
+                      Nossos Idosos
+                    </h2>
+
+                    {instituicao.idosos.length === 0 ? (
+                      <Card className="border-teal-200">
+                        <CardContent className="py-12 text-center">
+                          <Users className="w-16 h-16 mx-auto text-teal-300 mb-4" />
+                          <p className="text-lg text-teal-700">
+                            Ainda não há idosos cadastrados nesta instituição
+                          </p>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {instituicao.idosos.map((idoso) => {
+                          const calculatedAge = calculateAge(idoso.dataAniversario);
+                          const displayedAge = calculatedAge ?? idoso.idade;
+
+                          return (
+                            <Link key={idoso.id} to={`/perfil-idoso/${idoso.id}`}>
+                              <Card className="border-teal-200 hover:shadow-lg transition-all cursor-pointer h-full">
+                                <CardContent className="p-4">
+                                  <div className="flex flex-col items-center text-center">
+                                    {idoso.foto ? (
+                                      <img
+                                        src={idoso.foto}
+                                        alt={idoso.nome}
+                                        className="w-20 h-20 rounded-full object-cover mb-3 border-3 border-teal-100"
+                                      />
+                                    ) : (
+                                      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-teal-100 to-rose-100 flex items-center justify-center mb-3 border-3 border-teal-100">
+                                        <Users className="w-10 h-10 text-teal-600" />
+                                      </div>
+                                    )}
+                                    <h3 className="text-lg font-medium text-teal-900">{idoso.nome}</h3>
+                                    <p className="text-sm text-teal-600 mb-2">{displayedAge} anos</p>
+                                    {idoso.historia && (
+                                      <p className="text-xs text-teal-700 line-clamp-2">
+                                        {idoso.historia}
+                                      </p>
+                                    )}
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>

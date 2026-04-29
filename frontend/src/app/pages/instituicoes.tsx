@@ -258,129 +258,45 @@ export function InstituicoesPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-8">
+          <div className="space-y-4">
             {instituicoes.map((instituicao) => (
-              <Card key={instituicao.id} className="border-teal-200 shadow-lg">
-                <CardHeader className="bg-gradient-to-r from-teal-50 to-rose-50">
-                  <CardTitle className="text-3xl text-teal-900">
-                    {instituicao.nomeInstituicao}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-6">
-                  {instituicao.imagem_url && (
-                    <div className="mb-8">
-                      <img
-                        src={instituicao.imagem_url}
-                        alt={instituicao.nomeInstituicao}
-                        className="w-full max-h-64 object-cover rounded-lg border-2 border-teal-100"
-                      />
-                    </div>
-                  )}
-                  
-                  <div className="grid md:grid-cols-2 gap-6 mb-8">
-                    <div>
-                      <h3 className="text-lg font-medium text-teal-900 mb-4">
-                        Sobre a Instituição
-                      </h3>
-                      <p className="text-teal-800 mb-4">{instituicao.descricao}</p>
-                      <div className="text-sm text-teal-700">
-                        <p className="font-medium">CNPJ: {instituicao.cnpj}</p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <div className="bg-teal-50 rounded-lg p-4">
-                        <div className="flex items-start gap-3">
-                          <MapPin className="w-5 h-5 text-teal-600 mt-1" />
-                          <div>
-                            <h4 className="font-medium text-teal-900 mb-1">Endereço</h4>
-                            <p className="text-teal-700">{instituicao.endereco}</p>
-                            <p className="text-teal-700">
-                              {instituicao.cidade} - {instituicao.estado}
-                            </p>
-                            <p className="text-teal-700">CEP: {instituicao.cep}</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="bg-teal-50 rounded-lg p-4">
-                        <div className="flex items-start gap-3">
-                          <Phone className="w-5 h-5 text-teal-600 mt-1" />
-                          <div>
-                            <h4 className="font-medium text-teal-900 mb-1">Contato</h4>
-                            <p className="text-teal-700">{instituicao.telefone}</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex items-center gap-3 mb-6">
-                      <Users className="w-8 h-8 text-teal-600" />
-                      <h2 className="text-3xl text-teal-900">
-                        Nossos Idosos ({instituicao.idosos.length})
-                      </h2>
-                    </div>
-
-                    {instituicao.idosos.length === 0 ? (
-                      <Card className="border-teal-200">
-                        <CardContent className="py-12 text-center">
-                          <Users className="w-16 h-16 mx-auto text-teal-300 mb-4" />
-                          <p className="text-lg text-teal-700">
-                            Ainda não há idosos cadastrados nesta instituição
-                          </p>
-                        </CardContent>
-                      </Card>
-                    ) : (
-                      <div className="space-y-8">
-                        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                          {instituicao.idososAmostra?.map((idoso) => (
-                            (() => {
-                              const calculatedAge = calculateAge(idoso.dataAniversario);
-                              const displayedAge = calculatedAge ?? idoso.idade;
-
-                              return (
-                          <Link key={idoso.id} to={`/perfil-idoso/${idoso.id}`}>
-                            <Card className="border-teal-200 hover:shadow-xl transition-all cursor-pointer h-full">
-                              <CardContent className="p-6">
-                                <div className="flex flex-col items-center text-center">
-                                  {idoso.foto ? (
-                                    <img
-                                      src={idoso.foto}
-                                      alt={idoso.nome}
-                                      className="w-24 h-24 rounded-full object-cover mb-4 border-4 border-teal-100"
-                                    />
-                                  ) : (
-                                    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-teal-100 to-rose-100 flex items-center justify-center mb-4 border-4 border-teal-100">
-                                      <Users className="w-12 h-12 text-teal-600" />
-                                    </div>
-                                  )}
-                                  <h3 className="text-xl text-teal-900 mb-1">{idoso.nome}</h3>
-                                  <p className="text-teal-600 mb-3">{displayedAge} anos</p>
-                                  {idoso.historia && (
-                                    <p className="text-sm text-teal-700 line-clamp-3">
-                                      {idoso.historia}
-                                    </p>
-                                  )}
-                                </div>
-                              </CardContent>
-                            </Card>
-                          </Link>
-                              );
-                            })()
-                          ))}
-                        </div>
-                        
-                        <div className="flex justify-center pt-4">
-                          <Link to={`/instituicoes/${instituicao.id}`}>
-                            <Button className="bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 text-white px-8 py-6 text-lg rounded-lg shadow-lg hover:shadow-xl transition-all">
-                              Ver Instituição
-                            </Button>
-                          </Link>
-                        </div>
+              <Card key={instituicao.id} className="border-teal-200 shadow-md hover:shadow-lg transition-shadow">
+                <CardContent className="pt-5 pb-5">
+                  <div className="flex items-start gap-4">
+                    {/* Logo */}
+                    {instituicao.imagem_url && (
+                      <div className="flex-shrink-0">
+                        <img
+                          src={instituicao.imagem_url}
+                          alt={instituicao.nomeInstituicao}
+                          className="w-24 h-24 rounded-full object-cover border-2 border-teal-100"
+                        />
                       </div>
                     )}
+                    
+                    {/* Info */}
+                    <div className="flex-grow min-w-0">
+                      <h3 className="text-lg font-semibold text-teal-900 mb-1">
+                        {instituicao.nomeInstituicao}
+                      </h3>
+                      <p className="text-xs text-teal-600 mb-1">{instituicao.cidade} - {instituicao.estado}</p>
+                      <p className="text-sm text-teal-700 line-clamp-2 mb-2">{instituicao.descricao}</p>
+                      <div className="flex items-center gap-3 text-xs text-teal-600 mb-2 flex-wrap">
+                        <div className="flex items-center gap-1">
+                          <Phone className="w-3 h-3" />
+                          <span>{instituicao.telefone}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Users className="w-3 h-3" />
+                          <span>{instituicao.idosos.length} idosos</span>
+                        </div>
+                      </div>
+                      <Link to={`/instituicoes/${instituicao.id}`}>
+                        <Button className="bg-teal-600 hover:bg-teal-700 text-white text-xs py-1 px-4 h-8">
+                          Ver Instituição
+                        </Button>
+                      </Link>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
