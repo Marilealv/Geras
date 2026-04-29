@@ -58,9 +58,6 @@ export function InstituicaoDetalhesPage() {
 
   const quickAccessPath = headerUser?.tipo === "moderador" ? "/moderador" : "/dashboard";
   const quickAccessLabel = headerUser?.tipo === "moderador" ? "Moderador" : "Minha instituição";
-  const btnTransition = "transition-all duration-300";
-  const quickAccessStateClass = headerUser ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4 pointer-events-none";
-  const loginStateClass = headerUser ? "opacity-0 -translate-x-4 pointer-events-none" : "opacity-100 translate-x-0";
 
   const calculateAge = (birthDate?: string): number | null => {
     if (!birthDate) return null;
@@ -144,29 +141,23 @@ export function InstituicaoDetalhesPage() {
             </Link>
           </div>
           <div className="flex items-center gap-2 sm:gap-4">
+            {headerUser ? (
+              <Link to={quickAccessPath}>
+                <Button variant="outline" className="border-teal-700 text-teal-900 hover:bg-teal-50">
+                  <Building2 className="w-4 h-4 mr-0 sm:mr-2" />
+                  <span className="hidden sm:inline">{quickAccessLabel}</span>
+                </Button>
+              </Link>
+            ) : (
+              <Link to="/login">
+                <Button className="bg-[#F7C672] hover:bg-[#f5b85a] text-teal-900">Entrar</Button>
+              </Link>
+            )}
+
             <Link to="/instituicoes">
-              <Button
-                variant="outline"
-                className={`border-teal-700 text-teal-900 hover:bg-teal-50 ${btnTransition}`}
-              >
+              <Button variant="outline" className="border-teal-700 text-teal-900 hover:bg-teal-50">
                 <ArrowLeft className="w-4 h-4 mr-0 sm:mr-2" />
                 <span className="hidden sm:inline">Voltar</span>
-              </Button>
-            </Link>
-
-            <Link to={quickAccessPath} className={`${btnTransition} ${quickAccessStateClass}`}>
-              <Button
-                variant="outline"
-                className={`border-teal-700 text-teal-900 hover:bg-teal-50 ${btnTransition} ${quickAccessStateClass}`}
-              >
-                <Building2 className="w-4 h-4 mr-0 sm:mr-2" />
-                <span className="hidden sm:inline">{quickAccessLabel}</span>
-              </Button>
-            </Link>
-
-            <Link to="/login" className={`${btnTransition} ${loginStateClass}`}>
-              <Button className={`bg-[#F7C672] hover:bg-[#f5b85a] text-teal-900 ${btnTransition} ${loginStateClass}`}>
-                Entrar
               </Button>
             </Link>
           </div>
