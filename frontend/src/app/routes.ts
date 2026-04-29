@@ -7,6 +7,7 @@ import { CadastrarIdosoPage } from "./pages/cadastrar-idoso";
 import { CadastrarInstituicaoPage } from "./pages/cadastrar-instituicao";
 import { PerfilIdosoPage } from "./pages/perfil-idoso";
 import { InstituicoesPage } from "./pages/instituicoes";
+import { InstituicaoDetalhesPage } from "./pages/instituicao-detalhes";
 import { ModeradorPage } from "./pages/moderador";
 import { TrocarSenhaPage } from "./pages/trocar-senha";
 import { EsqueciSenhaPage } from "./pages/esqueci-senha";
@@ -57,6 +58,10 @@ export const router = createBrowserRouter([
   {
     path: "/instituicoes",
     Component: InstituicoesPage,
+  },
+  {
+    path: "/instituicoes/:id",
+    Component: InstituicaoDetalhesPage,
   },
   {
     path: "/moderador",

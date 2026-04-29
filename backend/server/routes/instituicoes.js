@@ -213,8 +213,9 @@ export function registerInstituicoesRoutes({
     try {
       const instituicoesResult = await pool.query(
         `SELECT inst.id, inst.nome, inst.cnpj, inst.endereco, inst.cidade, inst.estado,
-                inst.cep, inst.telefone, inst.descricao, inst.status
+                inst.cep, inst.telefone, inst.descricao, inst.status, inst.imagem_id, img.cloudinary_url AS logo_url
          FROM instituicoes inst
+         LEFT JOIN imagens img ON img.id = inst.imagem_id
          WHERE inst.status IN ('aprovada', 'ativa')
          ORDER BY inst.criado_em DESC`
       );
@@ -264,12 +265,77 @@ export function registerInstituicoesRoutes({
           descricao: row.descricao,
           status: row.status,
           status_ui: mapInstituicaoStatusToUi(row.status),
+          logo_url: row.logo_url,
+          imagem_url: row.logo_url,
           idosos: idososByInstituicaoId.get(row.id) || [],
         })),
       });
     } catch (error) {
       console.error("Erro ao listar instituicoes publicas:", error);
       return res.status(500).json({ message: "Erro interno ao listar instituicoes publicas." });
+    }
+  });
+
+  app.get("/api/instituicoes/publicas/:id", async (req, res) => {
+    const { id } = req.params;
+
+    if (!id || isNaN(Number(id))) {
+      return res.status(400).json({ message: "ID da instituicao invalido." });
+    }
+
+    try {
+      const instituicaoResult = await pool.query(
+        `SELECT inst.id, inst.nome, inst.cnpj, inst.endereco, inst.cidade, inst.estado,
+                inst.cep, inst.telefone, inst.descricao, inst.status, inst.imagem_id, img.cloudinary_url AS logo_url
+         FROM instituicoes inst
+         LEFT JOIN imagens img ON img.id = inst.imagem_id
+         WHERE inst.id = $1 AND inst.status IN ('aprovada', 'ativa')`,
+        [id]
+      );
+
+      if (!instituicaoResult.rowCount) {
+        return res.status(404).json({ message: "Instituicao nao encontrada ou nao aprovada." });
+      }
+
+      const instituicao = instituicaoResult.rows[0];
+
+      const idososResult = await pool.query(
+        `SELECT i.id, i.instituicao_id, i.nome, i.idade, i.data_aniversario, i.historia, img.cloudinary_url AS foto_url
+         FROM idosos i
+         LEFT JOIN imagens img ON img.id = i.imagem_id
+         WHERE i.instituicao_id = $1
+         ORDER BY i.criado_em DESC`,
+        [id]
+      );
+
+      return res.json({
+        instituicao: {
+          id: instituicao.id,
+          nome: instituicao.nome,
+          cnpj: instituicao.cnpj,
+          endereco: instituicao.endereco,
+          cidade: instituicao.cidade,
+          estado: instituicao.estado,
+          cep: instituicao.cep,
+          telefone: instituicao.telefone,
+          descricao: instituicao.descricao,
+          status: instituicao.status,
+          status_ui: mapInstituicaoStatusToUi(instituicao.status),
+          logo_url: instituicao.logo_url,
+          imagem_url: instituicao.logo_url,
+          idosos: idososResult.rows.map((idoso) => ({
+            id: idoso.id,
+            nome: idoso.nome,
+            idade: idoso.idade,
+            data_aniversario: idoso.data_aniversario,
+            historia: idoso.historia,
+            foto_url: idoso.foto_url,
+          })),
+        },
+      });
+    } catch (error) {
+      console.error("Erro ao buscar instituicao publica:", error);
+      return res.status(500).json({ message: "Erro interno ao buscar instituicao publica." });
     }
   });
 

@@ -27,7 +27,9 @@ interface Instituicao {
   cep: string;
   telefone: string;
   descricao: string;
+  imagem_url?: string;
   idosos: Idoso[];
+  idososAmostra?: Idoso[]; // 3 idosos aleatórios
 }
 
 interface HeaderUser {
@@ -38,6 +40,14 @@ export function InstituicoesPage() {
   const [instituicoes, setInstituicoes] = useState<Instituicao[]>([]);
   const [headerUser, setHeaderUser] = useState<HeaderUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Função para selecionar 3 idosos aleatórios
+  const selecionarIdososAleatorios = (idosos: Idoso[]): Idoso[] => {
+    if (idosos.length <= 3) return idosos;
+    
+    const shuffled = [...idosos].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, 3);
+  };
 
   const calculateAge = (birthDate?: string): number | null => {
     if (!birthDate) return null;
@@ -133,25 +143,31 @@ export function InstituicoesPage() {
           return;
         }
 
-        const mappedInstituicoes: Instituicao[] = (payload.instituicoes || []).map((inst: any) => ({
-          id: String(inst.id),
-          nomeInstituicao: inst.nome,
-          cnpj: inst.cnpj,
-          endereco: inst.endereco,
-          cidade: inst.cidade,
-          estado: inst.estado,
-          cep: inst.cep,
-          telefone: inst.telefone,
-          descricao: inst.descricao,
-          idosos: (inst.idosos || []).map((idoso: any) => ({
+        const mappedInstituicoes: Instituicao[] = (payload.instituicoes || []).map((inst: any) => {
+          const idososMapeados = (inst.idosos || []).map((idoso: any) => ({
             id: String(idoso.id),
             nome: idoso.nome,
             idade: idoso.idade,
             dataAniversario: idoso.data_aniversario || undefined,
             foto: idoso.foto_url,
             historia: idoso.historia,
-          })),
-        }));
+          }));
+          
+          return {
+            id: String(inst.id),
+            nomeInstituicao: inst.nome,
+            cnpj: inst.cnpj,
+            endereco: inst.endereco,
+            cidade: inst.cidade,
+            estado: inst.estado,
+            cep: inst.cep,
+            telefone: inst.telefone,
+            descricao: inst.descricao,
+            imagem_url: inst.logo_url || inst.imagem_url,
+            idosos: idososMapeados,
+            idososAmostra: selecionarIdososAleatorios(idososMapeados),
+          };
+        });
 
         const enrichedInstituicoes = await enrichMissingBirthDates(mappedInstituicoes);
         setInstituicoes(enrichedInstituicoes);
@@ -251,6 +267,16 @@ export function InstituicoesPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-6">
+                  {instituicao.imagem_url && (
+                    <div className="mb-8">
+                      <img
+                        src={instituicao.imagem_url}
+                        alt={instituicao.nomeInstituicao}
+                        className="w-full max-h-64 object-cover rounded-lg border-2 border-teal-100"
+                      />
+                    </div>
+                  )}
+                  
                   <div className="grid md:grid-cols-2 gap-6 mb-8">
                     <div>
                       <h3 className="text-lg font-medium text-teal-900 mb-4">
@@ -307,13 +333,14 @@ export function InstituicoesPage() {
                         </CardContent>
                       </Card>
                     ) : (
-                      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {instituicao.idosos.map((idoso) => (
-                          (() => {
-                            const calculatedAge = calculateAge(idoso.dataAniversario);
-                            const displayedAge = calculatedAge ?? idoso.idade;
+                      <div className="space-y-8">
+                        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                          {instituicao.idososAmostra?.map((idoso) => (
+                            (() => {
+                              const calculatedAge = calculateAge(idoso.dataAniversario);
+                              const displayedAge = calculatedAge ?? idoso.idade;
 
-                            return (
+                              return (
                           <Link key={idoso.id} to={`/perfil-idoso/${idoso.id}`}>
                             <Card className="border-teal-200 hover:shadow-xl transition-all cursor-pointer h-full">
                               <CardContent className="p-6">
@@ -340,9 +367,18 @@ export function InstituicoesPage() {
                               </CardContent>
                             </Card>
                           </Link>
-                            );
-                          })()
-                        ))}
+                              );
+                            })()
+                          ))}
+                        </div>
+                        
+                        <div className="flex justify-center pt-4">
+                          <Link to={`/instituicoes/${instituicao.id}`}>
+                            <Button className="bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 text-white px-8 py-6 text-lg rounded-lg shadow-lg hover:shadow-xl transition-all">
+                              Ver Instituição
+                            </Button>
+                          </Link>
+                        </div>
                       </div>
                     )}
                   </div>
