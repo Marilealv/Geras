@@ -217,6 +217,9 @@ export function PerfilIdosoPage() {
   const quickAccessPath = authUser?.tipo === "moderador" ? "/moderador" : "/dashboard";
   const quickAccessLabel = authUser?.tipo === "moderador" ? "Moderador" : "Minha instituição";
   const backPath = authUser ? "/dashboard" : "/";
+  const btnTransition = "transition-all duration-300";
+  const quickAccessStateClass = authUser ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4 pointer-events-none";
+  const loginStateClass = authUser ? "opacity-0 -translate-x-4 pointer-events-none" : "opacity-100 translate-x-0";
 
   const handleEdit = () => {
     if (!canManageProfile) {
@@ -504,29 +507,27 @@ export function PerfilIdosoPage() {
               <img src={logoGeras} alt="Geras" className="h-12" />
             </Link>
           </div>
-          <div className="flex items-center gap-2 sm:gap-4 transition-all duration-300">
-            {authUser ? (
-              <Link to={quickAccessPath}>
-                <Button
-                  variant="outline"
-                  className="border-teal-700 text-teal-900 hover:bg-teal-50 transition-all duration-300"
-                >
-                  <Building2 className="w-4 h-4 mr-0 sm:mr-2" />
-                  <span className="hidden sm:inline">{quickAccessLabel}</span>
-                </Button>
-              </Link>
-            ) : (
-              <Link to="/login">
-                <Button className="bg-[#F7C672] hover:bg-[#f5b85a] text-teal-900 transition-all duration-300">
-                  Entrar
-                </Button>
-              </Link>
-            )}
+          <div className="flex items-center gap-2 sm:gap-4">
+            <Link to={quickAccessPath} className={`flex items-center ${btnTransition} ${quickAccessStateClass}`}>
+              <Button
+                variant="outline"
+                className={`border-teal-700 text-teal-900 hover:bg-teal-50 ${btnTransition} ${quickAccessStateClass}`}
+              >
+                <Building2 className="w-4 h-4 mr-0 sm:mr-2" />
+                <span className="hidden sm:inline">{quickAccessLabel}</span>
+              </Button>
+            </Link>
+
+            <Link to="/login" className={`flex items-center ${btnTransition} ${loginStateClass}`}>
+              <Button className={`bg-[#F7C672] hover:bg-[#f5b85a] text-teal-900 ${btnTransition} ${loginStateClass}`}>
+                Entrar
+              </Button>
+            </Link>
 
             <Link to={backPath}>
               <Button
                 variant="outline"
-                className="border-teal-700 text-teal-900 hover:bg-teal-50 transition-all duration-300"
+                className={`border-teal-700 text-teal-900 hover:bg-teal-50 ${btnTransition}`}
               >
                 <ArrowLeft className="w-4 h-4 mr-0 sm:mr-2" />
                 <span className="hidden sm:inline">Voltar</span>
