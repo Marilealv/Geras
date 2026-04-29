@@ -7,6 +7,10 @@ const MAIL_USER = process.env.SMTP_USER || "";
 const MAIL_PASS = process.env.SMTP_PASS || "";
 const MAIL_FROM = process.env.SMTP_FROM || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || "";
 const MAIL_FROM_NAME = process.env.SMTP_FROM_NAME || "Geras";
+const MAIL_CONNECTION_TIMEOUT_MS = Number(process.env.SMTP_CONNECTION_TIMEOUT_MS || 10000);
+const MAIL_GREETING_TIMEOUT_MS = Number(process.env.SMTP_GREETING_TIMEOUT_MS || 10000);
+const MAIL_SOCKET_TIMEOUT_MS = Number(process.env.SMTP_SOCKET_TIMEOUT_MS || 15000);
+const MAIL_SEND_TIMEOUT_MS = Number(process.env.SMTP_SEND_TIMEOUT_MS || 15000);
 
 function normalizeBaseUrl(value) {
   const raw = String(value || "").trim();
@@ -25,6 +29,22 @@ function normalizeBaseUrl(value) {
 const FRONTEND_BASE_URL = normalizeBaseUrl(process.env.FRONTEND_BASE_URL || "http://localhost:5173");
 
 let transporter = null;
+
+function withTimeout(promise, timeoutMs, label) {
+  let timeoutId;
+
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`${label} excedeu o tempo limite de ${timeoutMs}ms.`));
+    }, timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  });
+}
 
 function extractEmailAddress(value) {
   const raw = String(value || "").trim();
@@ -60,10 +80,21 @@ function getTransporter() {
   }
 
   if (!transporter) {
+    console.log("Configurando transporte SMTP:", {
+      host: MAIL_HOST,
+      port: MAIL_PORT,
+      secure: MAIL_SECURE,
+      userConfigured: Boolean(MAIL_USER),
+      fromConfigured: Boolean(FROM_ADDRESS),
+    });
+
     transporter = nodemailer.createTransport({
       host: MAIL_HOST,
       port: MAIL_PORT,
       secure: MAIL_SECURE,
+      connectionTimeout: MAIL_CONNECTION_TIMEOUT_MS,
+      greetingTimeout: MAIL_GREETING_TIMEOUT_MS,
+      socketTimeout: MAIL_SOCKET_TIMEOUT_MS,
       auth: {
         user: MAIL_USER,
         pass: MAIL_PASS,
@@ -87,13 +118,17 @@ async function sendEmail({ to, subject, html, text }) {
     );
   }
 
-  await transport.sendMail({
-    from: FROM_ADDRESS,
-    to,
-    subject,
-    text,
-    html,
-  });
+  await withTimeout(
+    transport.sendMail({
+      from: FROM_ADDRESS,
+      to,
+      subject,
+      text,
+      html,
+    }),
+    MAIL_SEND_TIMEOUT_MS,
+    "Envio de e-mail"
+  );
 }
 
 function buildUrl(pathname, token) {

@@ -446,15 +446,26 @@ export function registerAuthRoutes({
         return res.status(503).json({ message: "Servico de e-mail indisponivel no momento." });
       }
 
-      void sendResetPasswordMessage({
-        to: user.email,
-        nome: user.nome_responsavel,
-        resetUrl: buildResetPasswordUrl(resetToken.token),
-      }).catch((emailError) => {
+      try {
+        await sendResetPasswordMessage({
+          to: user.email,
+          nome: user.nome_responsavel,
+          resetUrl: buildResetPasswordUrl(resetToken.token),
+        });
+      } catch (emailError) {
         console.error("Erro ao enviar e-mail de redefinicao:", emailError);
-      });
 
-      return res.status(200).json({ message: "Se o e-mail estiver cadastrado, voce recebera as instrucoes." });
+        return res.status(202).json({
+          message:
+            "Token gerado com sucesso, mas nao foi possivel enviar o e-mail agora. Verifique as configuracoes de SMTP no backend.",
+          emailEnviado: false,
+        });
+      }
+
+      return res.status(200).json({
+        message: "Se o e-mail estiver cadastrado, voce recebera as instrucoes.",
+        emailEnviado: true,
+      });
     } catch (error) {
       console.error("Erro ao solicitar redefinicao de senha:", error);
       return res.status(500).json({ message: "Erro interno ao solicitar redefinicao de senha." });
