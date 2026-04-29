@@ -2,7 +2,12 @@ import nodemailer from "nodemailer";
 
 const MAIL_HOST = process.env.SMTP_HOST || "smtp.mailersend.net";
 const MAIL_PORT = Number(process.env.SMTP_PORT || 587);
-const MAIL_SECURE = String(process.env.SMTP_SECURE || "false").toLowerCase() === "true";
+const MAIL_SECURE_ENV = process.env.SMTP_SECURE;
+const MAIL_SECURE =
+  MAIL_SECURE_ENV === undefined
+    ? MAIL_PORT === 465
+    : String(MAIL_SECURE_ENV).toLowerCase() === "true";
+const MAIL_USE_STARTTLS = MAIL_PORT === 587 && !MAIL_SECURE;
 const MAIL_USER = process.env.SMTP_USER || "";
 const MAIL_PASS = process.env.SMTP_PASS || "";
 const MAIL_FROM = process.env.SMTP_FROM || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || "";
@@ -84,6 +89,7 @@ function getTransporter() {
       host: MAIL_HOST,
       port: MAIL_PORT,
       secure: MAIL_SECURE,
+      requireTLS: MAIL_USE_STARTTLS,
       userConfigured: Boolean(MAIL_USER),
       fromConfigured: Boolean(FROM_ADDRESS),
     });
@@ -92,6 +98,7 @@ function getTransporter() {
       host: MAIL_HOST,
       port: MAIL_PORT,
       secure: MAIL_SECURE,
+      requireTLS: MAIL_USE_STARTTLS,
       connectionTimeout: MAIL_CONNECTION_TIMEOUT_MS,
       greetingTimeout: MAIL_GREETING_TIMEOUT_MS,
       socketTimeout: MAIL_SOCKET_TIMEOUT_MS,
