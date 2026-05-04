@@ -112,8 +112,9 @@ export function registerAuthRoutes({
             verificationUrl: buildVerificationUrl(verificationToken.token),
           });
           emailEnviado = true;
+          console.log("E-mail de verificacao enviado com sucesso ao registro", { email: createdUser.email });
         } catch (emailError) {
-          console.error("Erro ao enviar e-mail de verificacao:", emailError);
+          console.error("Erro ao enviar e-mail de verificacao no registro:", emailError);
         }
       }
 
@@ -352,13 +353,22 @@ export function registerAuthRoutes({
         return res.status(503).json({ message: "Servico de e-mail indisponivel no momento." });
       }
 
-      await sendEmailVerificationMessage({
-        to: user.email,
-        nome: user.nome_responsavel,
-        verificationUrl: buildVerificationUrl(verificationToken.token),
-      });
-
-      return res.status(200).json({ message: "E-mail de verificacao reenviado." });
+      try {
+        await sendEmailVerificationMessage({
+          to: user.email,
+          nome: user.nome_responsavel,
+          verificationUrl: buildVerificationUrl(verificationToken.token),
+        });
+        console.log("E-mail de verificacao reenviado com sucesso", { email: user.email });
+        return res.status(200).json({ message: "E-mail de verificacao reenviado." });
+      } catch (emailError) {
+        console.error("Erro ao reenviar verificacao de e-mail:", emailError);
+        return res.status(202).json({
+          message:
+            "Token gerado com sucesso, mas nao foi possivel enviar o e-mail agora. Verifique as configuracoes de SMTP no backend.",
+          emailEnviado: false,
+        });
+      }
     } catch (error) {
       console.error("Erro ao reenviar verificacao de e-mail:", error);
       return res.status(500).json({ message: "Erro interno ao reenviar verificacao." });
