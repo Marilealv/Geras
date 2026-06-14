@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cypress:open": "cypress open",
+    "cypress:run": "cypress run"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
@@ -72,7 +74,8 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "4.7.0",
     "tailwindcss": "4.1.12",
-    "vite": "^6.4.2"
+    "vite": "^6.4.2",
+    "typescript": "^5.2.0"
   },
   "peerDependencies": {
     "react": "^18.3.1",
