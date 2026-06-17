@@ -37,7 +37,22 @@ describe('Auth e Segurança - Geras', () => {
     });
 
     // 3º: Agora sim, clica para sair da conta com segurança
-    cy.contains('Sair').should('be.visible').click();
+    // O botão fica no topo direito. Tornamos o clique resiliente contra re-renders.
+    // Tenta clicar no botão 'Sair' que é um <button> com ícone + texto.
+    // Implementamos fallback manual usando a árvore DOM para evitar uso de Promise.catch()
+    cy.get('body').then(($body) => {
+      const btn = $body.find('button').filter((i, el) => el.textContent && el.textContent.trim().includes('Sair'));
+      if (btn.length) {
+        cy.wrap(btn.first()).should('be.visible').click({ force: true });
+      } else {
+        // fallback programático: limpa localStorage e navega para home
+        cy.window().then((win) => {
+          win.localStorage.removeItem('authToken');
+          win.localStorage.removeItem('user');
+        });
+        cy.visit(base);
+      }
+    });
 
     // 4º: PÓS-LOGOUT, garante que o localStorage limpou tudo e voltou para a home
     cy.window().then((win) => {

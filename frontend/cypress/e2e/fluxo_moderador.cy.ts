@@ -24,27 +24,41 @@ describe('Fluxo Moderador - Geras', () => {
       contato: '555-0100',
       idosos: [{ id: 1, nome: 'João', necessidades: ['Ração'] }],
       privado: { banco: '0001', conta: '12345' },
-      status: 'PENDENTE',
+      status: 'pendente',
     };
 
-    // Intercepta pedidos pendentes (padrão mais amplo para capturar diferentes rotas)
-    cy.intercept('GET', '**/api/moderador/**', { statusCode: 200, body: [pendingInstitution] }).as('getPendentes');
+    // Intercepta pedidos pendentes: frontend espera um payload com `instituicoes: [...]`
+    cy.intercept('GET', '**/api/moderador/instituicoes', { statusCode: 200, body: { instituicoes: [pendingInstitution] } }).as('getPendentes');
 
-    // Intercepta aprovação
-    cy.intercept('POST', '**/api/moderador/aprovar/*', { statusCode: 200, body: { success: true } }).as('aprovar');
+    // Intercepta aprovação: frontend faz PATCH para `/api/moderador/instituicoes/:id/status`
+    cy.intercept('PATCH', '**/api/moderador/instituicoes/*/status', { statusCode: 200, body: { success: true } }).as('aprovar');
 
-    // Acessa a área do moderador
+    // Algumas áreas também consultam a rota pública de instituições; garantimos consistência
+    cy.intercept('GET', '**/api/instituicoes**', { statusCode: 200, body: { instituicoes: [pendingInstitution] } }).as('listInstituicoes');
+
     cy.visit(`${base}/moderador`);
-    cy.wait('@getPendentes', { timeout: 10000 });
 
-    // Verifica que a página do moderador carregou e o botão de aprovar aparece
-    cy.url().should('include', '/moderador');
-    cy.contains('Aprovar', { timeout: 10000 }).should('exist');
+    // 1) Clicar em 'Abrir Instituições' para acessar a listagem (visível na página)
+    cy.contains('Abrir Instituições').click();
 
-    // Clica em aprovar e checa feedback
-    cy.contains('Aprovar').click();
+    // 2) Rolamos até a seção 'Instituições Pendentes' e abrimos o primeiro item (ícone 'olho')
+    cy.contains('Instituições Pendentes').scrollIntoView();
+
+    // Aguarda a tabela carregar e garante que existe ao menos uma linha (pode demorar)
+    cy.get('table tbody tr', { timeout: 20000 }).first().within(() => {
+      // A coluna de ações tem vários botões; o primeiro é o 'Ver' (ícone Eye). Clicamos no primeiro botão.
+      cy.get('td').last().find('button').first().click({ force: true });
+    });
+
+    // 3) Clicar no botão de 'Aprovar' (segunda ação) e confirmar na modal
+    cy.get('table tbody tr').first().within(() => {
+      cy.get('td').last().find('button').eq(1).click({ force: true });
+    });
+
+    cy.contains('Aprovar Instituição', { timeout: 10000 }).should('be.visible');
+    cy.contains('Confirmar').click();
     cy.wait('@aprovar');
-    cy.contains(/aprovad/i, { timeout: 5000 }).should('exist');
+    cy.contains(/aplicad[oa]|sucesso|aprovad/i, { timeout: 5000 }).should('exist');
   });
 
   it('Donatário pendente não consegue logar (mensagem de pendente)', () => {
